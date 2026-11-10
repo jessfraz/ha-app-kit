@@ -69,7 +69,7 @@ button {
   cursor: pointer;
 }
 button:not(:disabled):hover {
-  background: color-mix(in srgb, var(--accent) 88%, var(--paper));
+  opacity: 0.88;
 }
 button:disabled,
 button.quiet:disabled,
