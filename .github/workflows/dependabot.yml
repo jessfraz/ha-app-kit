@@ -29,11 +29,11 @@ jobs:
             .type == "required_status_checks"
             and .parameters.strict_required_status_checks_policy == true
             and ([.parameters.required_status_checks[].context] as $checks
-              | ["Storybook and browser", "Dependency security", "Secret scan"]
+              | ["Storybook and browser", "Dependency security", "Secret scan", "HA companion"]
               | all(. as $name | $checks | index($name) != null))
           )' "$RUNNER_TEMP/rules.json"
       - name: Merge after required checks pass
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
-        run: gh pr merge --auto --squash "$PR_URL"
+        run: gh pr merge --auto --rebase "$PR_URL"

@@ -1,8 +1,9 @@
 # HA App Kit
 
-Shared libraries for Home Assistant apps. The first package is the common web
-UI: app shell, navigation, controls, status messages, and themes. App data,
-provider clients, and database migrations stay in their owning apps.
+Shared libraries for Home Assistant apps: the common web UI and native companion
+repair helpers. The UI supplies the app shell, navigation, controls, status
+messages, and themes. App data, provider clients, and database migrations stay
+in their owning apps.
 
 ## Develop
 
@@ -41,3 +42,7 @@ owns content spacing, submission, dismissal, focus, and pending work.
 Other shared Rust, Python, Nix, and workflow code belongs here when existing
 apps demonstrate a common contract. There is no shared application database or
 universal domain model.
+
+[`packages/ha`](packages/ha/README.md) supplies the version-repair flow and a
+build-time bundler for each companion's private helper package. It uses native
+HA backups and update entities, with matching release readbacks before restart.
