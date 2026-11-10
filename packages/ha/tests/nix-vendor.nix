@@ -12,7 +12,9 @@
       (root + /Cargo.lock)
       (root + /packages/ui)
       ../Cargo.toml
+      ../brand.py
       ../bundle.py
+      ../icons
       ../rust
       ../ha_app_kit/__init__.py
       ../ha_app_kit/bundle.py
@@ -44,11 +46,14 @@
   };
 in
   pkgs.runCommand "ha-app-kit-companion-vendoring" {
-    nativeBuildInputs = [pkgs.cargo pkgs.python314];
+    nativeBuildInputs = [
+      pkgs.cargo
+      (pkgs.python314.withPackages (ps: [ps.pyyaml]))
+    ];
   } ''
     export CARGO_HOME="$TMPDIR/cargo-home"
     export CARGO_NET_OFFLINE=true
-    mkdir -p "$CARGO_HOME" consumer/src consumer/.cargo companion
+    mkdir -p "$CARGO_HOME" consumer/src consumer/.cargo companion app
     cat > consumer/Cargo.toml <<'EOF'
     [package]
     name = "fictional-consumer"
@@ -68,6 +73,14 @@ in
       --manifest-path "$PWD/consumer/Cargo.toml" \
       --integration "$PWD/companion" > receipt.json
     cmp companion/_app_kit/repairs.py ${vendor}/ha-app-kit-ha-${kitVersion}/ha_app_kit/repairs.py
+    printf '%s\n' 'panel_icon: "mdi:mailbox-outline"' > app/config.yaml
+    for mode in sync check; do
+      python ${vendor}/ha-app-kit-ha-${kitVersion}/brand.py \
+        --manifest-path "$PWD/consumer/Cargo.toml" \
+        --app "$PWD/app" --integration "$PWD/companion" --"$mode"
+    done
+    cmp app/icon.png ${vendor}/ha-app-kit-ha-${kitVersion}/icons/png/mailbox-outline/app-icon.png
+    cmp companion/brand/icon@2x.png ${vendor}/ha-app-kit-ha-${kitVersion}/icons/png/mailbox-outline/icon@2x.png
     python - <<'PY'
     import json
     from pathlib import Path

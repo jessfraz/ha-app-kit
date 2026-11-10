@@ -1,6 +1,6 @@
 [project]
 name = "ha-app-kit-ha"
-version = "0.1.3"
+version = "0.1.4"
 description = "Shared companion repair flows and build tooling"
 requires-python = ">=3.14.2"
 dependencies = []
@@ -37,4 +37,4 @@ line-length = 88
 select = ["E", "F", "I", "UP", "B", "ASYNC", "ANN"]
 
 [tool.ty.src]
-include = ["ha_app_kit", "tests"]
+include = ["brand.py", "ha_app_kit", "tests"]

@@ -52,3 +52,27 @@ Run the Python checks with `uv run --project packages/ha --frozen` inside the
 repository's Nix shell. The tests use native HA entries, registries, services,
 and backup models with fictional local I/O. They never update a running HA
 installation or contact a household provider.
+
+## Native icons
+
+The App's `config.yaml` `panel_icon` selects a pinned Material Design Icons
+glyph. Sync the App tile and Marketplace brand from the same locked resource
+crate. Run this in the consumer's Home Assistant development environment, which
+already provides PyYAML:
+
+```sh
+python /path/to/locked/crate/brand.py --sync \
+  --app example --integration custom_components/example
+```
+
+Commit the generated App `icon.png`, integration `brand/` icons, and both
+`ICON-LICENSE.txt` files. Existing logo overrides are synced to the same glyph.
+Run the same command with `--check` in CI against the source and again with the
+extracted release integration path. A missing or changed file fails the check.
+Supervisor reads the tracked App tile and Marketplace reads the packaged brand.
+Each companion's `_app_kit` stays limited to runtime Python.
+
+The catalog records the exact upstream source, glyph authors, and SVG checksums.
+To regenerate it, run `nix develop -c python scripts/render-icons.py` at the Kit
+root. CI renders the catalog from the pinned SVGs and compares the committed PNG
+bytes.
