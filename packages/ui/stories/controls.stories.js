@@ -152,7 +152,8 @@ export const LongForm = {
     body.style.cssText = "display:grid;gap:18px;padding-top:20px";
     const footer = document.createElement("div");
     footer.className = "dialog-footer";
-    footer.style.cssText = "display:flex;justify-content:flex-end;gap:10px";
+    const actions = document.createElement("div");
+    actions.className = "actions";
     const cancel = document.createElement("button");
     cancel.type = "button";
     cancel.className = "quiet";
@@ -165,7 +166,8 @@ export const LongForm = {
       event.preventDefault();
       dialog.close();
     });
-    footer.append(cancel, save);
+    actions.append(cancel, save);
+    footer.append(actions);
     form.append(header, body, footer);
     dialog.append(form);
     open.addEventListener("click", () => dialog.showModal());

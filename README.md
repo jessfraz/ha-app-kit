@@ -34,8 +34,9 @@ separate app-owned alert. Icon URLs are relative or HTTP(S); app-owned inline
 SVG belongs in `brand`.
 
 Long native dialogs can use `dialog-panel`, with a form containing
-`dialog-heading`, `dialog-body`, and `dialog-footer`. Only the body scrolls; the
-app still owns submission, dismissal, focus, and pending work.
+`dialog-heading`, `dialog-body`, and `dialog-footer`. Only the body scrolls; an
+`actions` group in the footer wraps its buttons on narrow screens. The app still
+owns content spacing, submission, dismissal, focus, and pending work.
 
 Other shared Rust, Python, Nix, and workflow code belongs here when existing
 apps demonstrate a common contract. There is no shared application database or
