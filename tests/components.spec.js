@@ -2,10 +2,14 @@ import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { fileURLToPath } from "node:url";
 
+// The browser assertions own axe runs. Storybook auto-analysis would race them.
+
 test("shell preserves actions, navigation, safe links and status", async ({
   page,
 }) => {
-  await page.goto("/iframe.html?id=app-shell--connected&viewMode=story");
+  await page.goto(
+    "/iframe.html?id=app-shell--connected&viewMode=story&globals=a11y.manual:!true",
+  );
   await expect(
     page.getByRole("banner").getByRole("link", { name: "Mail home" }),
   ).toBeVisible();
@@ -38,7 +42,9 @@ for (const story of [
   test(`${story} has no accessibility violations or horizontal overflow`, async ({
     page,
   }) => {
-    await page.goto(`/iframe.html?id=${story}&viewMode=story`);
+    await page.goto(
+      `/iframe.html?id=${story}&viewMode=story&globals=a11y.manual:!true`,
+    );
     await expect(page.getByRole("main")).toBeVisible();
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     expect(
@@ -53,7 +59,9 @@ for (const story of [
 test("native dialog is accessible while open and returns keyboard focus", async ({
   page,
 }) => {
-  await page.goto("/iframe.html?id=components-controls--dialog&viewMode=story");
+  await page.goto(
+    "/iframe.html?id=components-controls--dialog&viewMode=story&globals=a11y.manual:!true",
+  );
   const open = page.getByRole("button", { name: "View details" });
   await open.focus();
   await page.keyboard.press("Enter");
@@ -68,7 +76,9 @@ test("native dialog is accessible while open and returns keyboard focus", async 
 });
 
 test("required form choice enables its action", async ({ page }) => {
-  await page.goto("/iframe.html?id=components-controls--form&viewMode=story");
+  await page.goto(
+    "/iframe.html?id=components-controls--form&viewMode=story&globals=a11y.manual:!true",
+  );
   await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
   await page.getByLabel("Mailbox").selectOption("example");
   await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
@@ -85,7 +95,9 @@ test("mount rejects invalid destinations without changing app-owned DOM and crea
       contentType: "text/javascript",
     }),
   );
-  await page.goto("/iframe.html?id=app-shell--connected&viewMode=story");
+  await page.goto(
+    "/iframe.html?id=app-shell--connected&viewMode=story&globals=a11y.manual:!true",
+  );
   const result = await page.evaluate(async () => {
     const moduleUrl = new URL("/app-kit-contract.js", location.href).href;
     /** @type {typeof import('../packages/ui/src/index.js')} */
