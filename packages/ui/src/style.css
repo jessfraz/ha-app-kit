@@ -108,8 +108,41 @@ textarea {
   padding: 10px 12px;
   border: 1px solid var(--control-border);
   border-radius: 6px;
-  background: var(--paper);
+  background-color: var(--paper);
   color: var(--ink);
+}
+select {
+  min-width: 0;
+  max-width: 100%;
+}
+/* Keep the native picker. Gradients avoid extra image permissions in app CSPs. */
+select:where(:not([multiple])):where(:not([size]), [size="0"], [size="1"]) {
+  appearance: none;
+  padding-inline-end: 44px;
+  background-image:
+    linear-gradient(
+      45deg,
+      transparent 35%,
+      var(--muted) 45% 55%,
+      transparent 65%
+    ),
+    linear-gradient(
+      -45deg,
+      transparent 35%,
+      var(--muted) 45% 55%,
+      transparent 65%
+    );
+  background-repeat: no-repeat;
+  background-position:
+    right 22px center,
+    right 17px center;
+  background-size: 5px 5px;
+  text-overflow: ellipsis;
+}
+select:dir(rtl) {
+  background-position:
+    left 17px center,
+    left 22px center;
 }
 input:is([type="checkbox"], [type="radio"]) {
   width: 18px;
@@ -120,7 +153,7 @@ input:is([type="checkbox"], [type="radio"]) {
 input:disabled,
 select:disabled,
 textarea:disabled {
-  background: var(--soft);
+  background-color: var(--soft);
   color: var(--muted);
   border-color: var(--line);
   cursor: not-allowed;
@@ -406,6 +439,14 @@ dialog > :last-child {
   .brand-dark,
   .single-brand .brand-light {
     display: block;
+  }
+}
+
+@media (forced-colors: active) {
+  select:where(:not([multiple])):where(:not([size]), [size="0"], [size="1"]) {
+    appearance: auto;
+    padding-inline-end: 12px;
+    background-image: none;
   }
 }
 
