@@ -101,7 +101,7 @@ summary:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
-input:not([type="checkbox"]):not([type="radio"]),
+input:where(:not([type="checkbox"]):not([type="radio"])),
 select,
 textarea {
   min-height: 44px;
@@ -117,6 +117,14 @@ input:is([type="checkbox"], [type="radio"]) {
   margin: 0;
   accent-color: var(--accent);
 }
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background: var(--soft);
+  color: var(--muted);
+  border-color: var(--line);
+  cursor: not-allowed;
+}
 label {
   display: grid;
   gap: 6px;
@@ -127,6 +135,15 @@ label:has(> input:is([type="checkbox"], [type="radio"])) {
   align-items: center;
   gap: 10px;
   min-height: 44px;
+}
+label:has(> input:disabled) {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+summary {
+  min-height: 44px;
+  padding-block: 12px;
+  cursor: pointer;
 }
 fieldset {
   margin: 0;
@@ -330,6 +347,33 @@ dialog::backdrop {
 }
 dialog > :last-child {
   margin-bottom: 0;
+}
+.dialog-panel {
+  padding: 0;
+  overflow: hidden;
+}
+.dialog-panel > form {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 34px);
+}
+.dialog-panel .dialog-heading {
+  flex: none;
+  padding: 16px 24px;
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+}
+.dialog-body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 24px 20px;
+}
+.dialog-footer {
+  flex: none;
+  padding: 16px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--paper);
 }
 
 @media (prefers-color-scheme: dark) {

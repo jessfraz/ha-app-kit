@@ -82,6 +82,23 @@ test("required form choice enables its action", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
   await page.getByLabel("Mailbox").selectOption("example");
   await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+  const enabledBackground = await page
+    .getByLabel("Mailbox")
+    .evaluate((field) => getComputedStyle(field).backgroundColor);
+  await expect(page.getByLabel("Provider account")).not.toHaveCSS(
+    "background-color",
+    enabledBackground,
+  );
+  const requirements = page.getByText("Connection requirements", {
+    exact: true,
+  });
+  const bounds = await requirements.boundingBox();
+  expect(bounds?.height).toBeGreaterThanOrEqual(44);
+  await requirements.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByText("Choose a mailbox before saving the connection."),
+  ).toBeVisible();
 });
 
 test("mount rejects invalid destinations without changing app-owned DOM and creates no IDs", async ({
@@ -169,4 +186,29 @@ test("mount rejects invalid destinations without changing app-owned DOM and crea
     renderedName: "<script>Example</script>",
     initialKind: "neutral",
   });
+});
+
+test("long dialog keeps actions visible while its fields scroll", async ({
+  page,
+}) => {
+  await page.goto(
+    "/iframe.html?id=components-controls--long-form&viewMode=story&globals=a11y.manual:!true",
+  );
+  const open = page.getByRole("button", { name: "Edit connection" });
+  await open.click();
+  const dialog = page.getByRole("dialog", { name: "Edit connection" });
+  await expect(dialog).toBeVisible();
+  const save = dialog.getByRole("button", { name: "Save connection" });
+  const cancel = dialog.getByRole("button", { name: "Cancel" });
+  await expect(save).toBeInViewport({ ratio: 1 });
+  await dialog.locator(".dialog-body").hover();
+  await page.mouse.wheel(0, 2000);
+  await expect(dialog.getByRole("heading")).toBeInViewport({ ratio: 1 });
+  await expect(save).toBeInViewport({ ratio: 1 });
+  await expect(cancel).toBeInViewport({ ratio: 1 });
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.mouse.move(0, 0);
+  await expect(page).toHaveScreenshot("long-form-dialog.png");
+  await cancel.click();
+  await expect(open).toBeFocused();
 });
