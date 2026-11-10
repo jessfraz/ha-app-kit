@@ -1,0 +1,11 @@
+[package]
+name = "ha-app-kit-ha"
+description = "Bundled Home Assistant companion helpers and build tooling"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+include = ["Cargo.toml", "bundle.py", "rust/**", "ha_app_kit/*.py"]
+
+[lib]
+path = "rust/lib.rs"

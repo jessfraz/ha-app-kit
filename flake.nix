@@ -27,6 +27,8 @@
           (rust-bin.fromRustupToolchainFile ./rust-toolchain.toml)
           nodejs_22
           pnpm
+          python314
+          uv
           alejandra
           actionlint
           gitleaks
