@@ -1,0 +1,6 @@
+pnpm-lock.yaml
+Cargo.lock
+storybook-static/
+target/
+test-results/
+playwright-report/

@@ -1,0 +1,11 @@
+[package]
+name = "ha-app-ui"
+description = "Shared web assets for Home Assistant apps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+include = ["Cargo.toml", "rust/**", "src/**"]
+
+[lib]
+path = "rust/lib.rs"

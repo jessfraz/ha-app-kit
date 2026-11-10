@@ -1,0 +1,38 @@
+# HA App Kit
+
+Shared libraries for Home Assistant apps. The first package is the common web
+UI: app shell, navigation, controls, status messages, and themes. App data,
+provider clients, and database migrations stay in their owning apps.
+
+## Develop
+
+```sh
+nix develop
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
+pnpm storybook
+```
+
+Storybook runs the same components shipped in the apps. Run `pnpm check` for
+type checks, browser tests, and the production Storybook build.
+
+## Use
+
+`packages/ui` is both a JavaScript package and a small Rust crate. Rust apps
+embed its assets at build time, so installed apps need neither Node nor a CDN.
+Consumers pin a toolkit release and keep their own release schedule.
+
+Serve `ha_app_ui::SCRIPT` as `app-kit.js` and `ha_app_ui::STYLESHEET` as
+`app-kit.css` through the app's existing web listener and ingress checks. The
+JavaScript module exports `mountAppShell`, `mountNavigation`, and `setNotice`.
+Branding, view routes, actions, and application data stay local.
+
+The shell returns its version and status nodes; it does not assign global IDs.
+`setStatus(text, kind)` distinguishes healthy, stale, and failed observations.
+Notices use a persistent polite live region. Blocking errors belong in a
+separate app-owned alert. Icon URLs are relative or HTTP(S); app-owned inline
+SVG belongs in `brand`.
+
+Other shared Rust, Python, Nix, and workflow code belongs here when existing
+apps demonstrate a common contract. There is no shared application database or
+universal domain model.
