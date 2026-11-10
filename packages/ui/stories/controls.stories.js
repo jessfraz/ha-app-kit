@@ -89,6 +89,55 @@ export const Form = {
 };
 
 /** @type {import('@storybook/html-vite').StoryObj} */
+export const Selects = {
+  render: () => {
+    const main = document.createElement("main");
+    const heading = document.createElement("h1");
+    heading.textContent = "Selects";
+    const fields = document.createElement("div");
+    fields.style.cssText =
+      "display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:20px;max-width:920px";
+    /** @type {Array<[string, string[]]>} */
+    const examples = [
+      ["Brand", ["All brands", "Example studio", "Fictional label"]],
+      ["Category", ["All categories", "Clothing", "Accessories"]],
+      ["Source", ["All sources", "Example provider"]],
+      [
+        "Long selection",
+        ["Example clothing label with an exceptionally descriptive name"],
+      ],
+      ["Disabled", ["Not connected"]],
+      [
+        "Right-to-left",
+        [
+          "Example provider with an exceptionally descriptive name",
+          "Another provider",
+        ],
+      ],
+      ["Multiple choices", ["Example one", "Example two", "Example three"]],
+    ];
+    for (const [name, choices] of examples) {
+      const label = document.createElement("label");
+      label.textContent = name;
+      const select = document.createElement("select");
+      for (const choice of choices) {
+        select.append(new Option(choice, choice));
+      }
+      select.disabled = name === "Disabled";
+      if (name === "Right-to-left") select.dir = "rtl";
+      if (name === "Multiple choices") {
+        select.multiple = true;
+        select.size = 3;
+      }
+      label.append(select);
+      fields.append(label);
+    }
+    main.append(heading, fields);
+    return main;
+  },
+};
+
+/** @type {import('@storybook/html-vite').StoryObj} */
 export const Dialog = {
   render: () => {
     const main = document.createElement("main");

@@ -14,6 +14,7 @@
   --muted: #6a6d71;
   --line: #e1e1de;
   --control-border: #85888c;
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none' stroke='%236a6d71' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 7.5 5 5 5-5'/%3E%3C/svg%3E");
   --accent: #1d1e20;
   --on-accent: #fff;
   --soft: #f0f0ee;
@@ -108,8 +109,25 @@ textarea {
   padding: 10px 12px;
   border: 1px solid var(--control-border);
   border-radius: 6px;
-  background: var(--paper);
+  background-color: var(--paper);
   color: var(--ink);
+}
+select {
+  min-width: 0;
+  max-width: 100%;
+}
+/* Keep the native picker and keyboard behavior, with room around its chevron. */
+select:where(:not([multiple])):where(:not([size]), [size="0"], [size="1"]) {
+  appearance: none;
+  padding-inline-end: 44px;
+  background-image: var(--select-chevron);
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 20px;
+  text-overflow: ellipsis;
+}
+select:dir(rtl) {
+  background-position: left 12px center;
 }
 input:is([type="checkbox"], [type="radio"]) {
   width: 18px;
@@ -120,7 +138,7 @@ input:is([type="checkbox"], [type="radio"]) {
 input:disabled,
 select:disabled,
 textarea:disabled {
-  background: var(--soft);
+  background-color: var(--soft);
   color: var(--muted);
   border-color: var(--line);
   cursor: not-allowed;
@@ -391,6 +409,7 @@ dialog > :last-child {
     --muted: #a9adaf;
     --line: #414547;
     --control-border: #777d83;
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none' stroke='%23a9adaf' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 7.5 5 5 5-5'/%3E%3C/svg%3E");
     --accent: #f1f1ef;
     --on-accent: #191b1d;
     --soft: #2c2f31;
@@ -406,6 +425,14 @@ dialog > :last-child {
   .brand-dark,
   .single-brand .brand-light {
     display: block;
+  }
+}
+
+@media (forced-colors: active) {
+  select:where(:not([multiple])):where(:not([size]), [size="0"], [size="1"]) {
+    appearance: auto;
+    padding-inline-end: 12px;
+    background-image: none;
   }
 }
 
