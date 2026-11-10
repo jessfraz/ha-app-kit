@@ -122,15 +122,15 @@ select:where(:not([multiple])):where(:not([size]), [size="0"], [size="1"]) {
   background-image:
     linear-gradient(
       45deg,
-      transparent 40%,
-      var(--muted) 40% 60%,
-      transparent 60%
+      transparent 35%,
+      var(--muted) 45% 55%,
+      transparent 65%
     ),
     linear-gradient(
       -45deg,
-      transparent 40%,
-      var(--muted) 40% 60%,
-      transparent 60%
+      transparent 35%,
+      var(--muted) 45% 55%,
+      transparent 65%
     );
   background-repeat: no-repeat;
   background-position:
