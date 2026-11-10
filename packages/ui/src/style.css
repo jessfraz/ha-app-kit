@@ -14,7 +14,6 @@
   --muted: #6a6d71;
   --line: #e1e1de;
   --control-border: #85888c;
-  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none' stroke='%236a6d71' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 7.5 5 5 5-5'/%3E%3C/svg%3E");
   --accent: #1d1e20;
   --on-accent: #fff;
   --soft: #f0f0ee;
@@ -116,18 +115,34 @@ select {
   min-width: 0;
   max-width: 100%;
 }
-/* Keep the native picker and keyboard behavior, with room around its chevron. */
+/* Keep the native picker. Gradients avoid extra image permissions in app CSPs. */
 select:where(:not([multiple])):where(:not([size]), [size="0"], [size="1"]) {
   appearance: none;
   padding-inline-end: 44px;
-  background-image: var(--select-chevron);
+  background-image:
+    linear-gradient(
+      45deg,
+      transparent 40%,
+      var(--muted) 40% 60%,
+      transparent 60%
+    ),
+    linear-gradient(
+      -45deg,
+      transparent 40%,
+      var(--muted) 40% 60%,
+      transparent 60%
+    );
   background-repeat: no-repeat;
-  background-position: right 12px center;
-  background-size: 20px;
+  background-position:
+    right 22px center,
+    right 17px center;
+  background-size: 5px 5px;
   text-overflow: ellipsis;
 }
 select:dir(rtl) {
-  background-position: left 12px center;
+  background-position:
+    left 17px center,
+    left 22px center;
 }
 input:is([type="checkbox"], [type="radio"]) {
   width: 18px;
@@ -409,7 +424,6 @@ dialog > :last-child {
     --muted: #a9adaf;
     --line: #414547;
     --control-border: #777d83;
-    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none' stroke='%23a9adaf' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 7.5 5 5 5-5'/%3E%3C/svg%3E");
     --accent: #f1f1ef;
     --on-accent: #191b1d;
     --soft: #2c2f31;

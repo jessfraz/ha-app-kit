@@ -43,6 +43,19 @@ for (const story of [
   test(`${story} has no accessibility violations or horizontal overflow`, async ({
     page,
   }) => {
+    if (story === "components-controls--selects") {
+      // Match apps that permit only same-origin images in their UI.
+      await page.route("**/iframe.html?**", async (route) => {
+        const response = await route.fetch();
+        await route.fulfill({
+          response,
+          headers: {
+            ...response.headers(),
+            "content-security-policy": "img-src 'self'",
+          },
+        });
+      });
+    }
     await page.goto(
       `/iframe.html?id=${story}&viewMode=story&globals=a11y.manual:!true`,
     );
