@@ -375,6 +375,13 @@ dialog > :last-child {
   border-top: 1px solid var(--line);
   background: var(--paper);
 }
+.dialog-footer .actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 0;
+}
 
 @media (prefers-color-scheme: dark) {
   :root {
