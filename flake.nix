@@ -28,6 +28,7 @@
           nodejs_22
           pnpm
           python314
+          resvg
           uv
           alejandra
           actionlint

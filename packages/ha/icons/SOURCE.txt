@@ -1,0 +1,4 @@
+Material Design Icons by Pictogrammers, version 7.4.47
+https://pictogrammers.com/library/mdi/
+https://github.com/Templarian/MaterialDesign-SVG/tree/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg
+Upstream SVGs are unmodified and licensed under Apache-2.0.

@@ -4,6 +4,7 @@ import importlib
 import json
 import os
 import subprocess
+import sys
 import tarfile
 import tomllib
 from pathlib import Path
@@ -138,6 +139,63 @@ def test_real_vendored_cargo_metadata_and_packaged_producer(
     assert (
         target / "_app_kit/versions.py"
     ).read_text() == "# Preserve unexpected source work.\n"
+
+
+def test_packaged_brand_cli_checks_native_app_and_marketplace_icons(
+    resource_crate: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CARGO_NET_OFFLINE", "true")
+    manifest = consumer(tmp_path / "consumer", resource_crate)
+    app = tmp_path / "app"
+    app.mkdir()
+    (app / "config.yaml").write_text('panel_icon: "mdi:mailbox-outline"\n')
+    (app / "logo.png").write_bytes(b"old App logo")
+    target = integration(tmp_path / "example", "example")
+    brand = target / "brand"
+    brand.mkdir()
+    (brand / "dark_logo@2x.png").write_bytes(b"old dark brand logo")
+    command = [
+        sys.executable,
+        str(resource_crate / "brand.py"),
+        "--manifest-path",
+        str(manifest),
+        "--app",
+        str(app),
+        "--integration",
+        str(target),
+    ]
+    subprocess.run([*command, "--sync"], check=True, capture_output=True)
+    subprocess.run([*command, "--check"], check=True, capture_output=True)
+
+    for path, size in (
+        (app / "icon.png", 128),
+        (brand / "icon.png", 256),
+        (brand / "icon@2x.png", 512),
+        (brand / "dark_icon.png", 256),
+        (brand / "dark_icon@2x.png", 512),
+    ):
+        png = path.read_bytes()
+        assert png.startswith(b"\x89PNG\r\n\x1a\n")
+        assert int.from_bytes(png[16:20]) == int.from_bytes(png[20:24]) == size
+    assert (app / "logo.png").read_bytes() == (brand / "icon@2x.png").read_bytes()
+    assert (brand / "dark_logo@2x.png").read_bytes() == (
+        brand / "dark_icon@2x.png"
+    ).read_bytes()
+    license_text = (target / "ICON-LICENSE.txt").read_text()
+    assert license_text == (app / "ICON-LICENSE.txt").read_text()
+    assert "Michael Richins" in license_text and "Apache License" in license_text
+
+    other_tile = (resource_crate / "icons/png/hanger/app-icon.png").read_bytes()
+    (app / "icon.png").write_bytes(other_tile)
+    (brand / "dark_icon.png").unlink()
+    rejected = subprocess.run([*command, "--check"], capture_output=True, text=True)
+    assert rejected.returncode == 1
+    assert str(app / "icon.png") in rejected.stderr
+    assert str(brand / "dark_icon.png") in rejected.stderr
+    assert (app / "icon.png").read_bytes() == other_tile
+    assert not (brand / "dark_icon.png").exists()
+    subprocess.run([*command, "--sync"], check=True, capture_output=True)
+    subprocess.run([*command, "--check"], check=True, capture_output=True)
 
 
 async def test_independent_vendored_modules_share_native_lifecycle(

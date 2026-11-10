@@ -1,0 +1,31 @@
+[glyphs.download-network-outline]
+author = "Michael Irigoyen"
+sha256 = "d8a0e0c6064b48a7929f9e9da4b8bb3faec864f46cd7007fc16d175152773e14"
+
+[glyphs.hanger]
+author = "Moma Design Studio"
+sha256 = "2c29dab023a62ae4afda00f3b76669d029b098eae90c70bed479c5cf757d1dfb"
+
+[glyphs.home-city-outline]
+author = "Google"
+sha256 = "185b1cf847384fffcc99958dd542743f320e962833f96eeee85843d344cbb957"
+
+[glyphs.mailbox-outline]
+author = "Michael Richins"
+sha256 = "7a680b27e9fc3e5c03b96aab2e70225a91b52715db601d1ccdd03fd1ff6d2b35"
+
+[glyphs.package-variant-closed]
+author = "Austin Andrews"
+sha256 = "c81936cfe05f6df9ec46a4572ac60a18c1e4fc3d55a8b7b114b9178e7768b52c"
+
+[glyphs.safe-square-outline]
+author = "Yaroslav Bandura"
+sha256 = "ae09b46a2c82f16b942116274e0ca9ce6713c765ab942687a1e7d7b7ae9bac11"
+
+[glyphs.transmission-tower]
+author = "Michael Irigoyen"
+sha256 = "bd8420bdb5a6e4708fdb6a9f4c6916553734cd29bbf5ac3ccb6342857994d3e2"
+
+[glyphs.wrench-clock]
+author = "Simran"
+sha256 = "7b0857f565a0ebdf37542b6e98100e6d7891e464713f68fc65ccdbf9917a74c4"
