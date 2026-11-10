@@ -33,6 +33,10 @@ Notices use a persistent polite live region. Blocking errors belong in a
 separate app-owned alert. Icon URLs are relative or HTTP(S); app-owned inline
 SVG belongs in `brand`.
 
+Long native dialogs can use `dialog-panel`, with a form containing
+`dialog-heading`, `dialog-body`, and `dialog-footer`. Only the body scrolls; the
+app still owns submission, dismissal, focus, and pending work.
+
 Other shared Rust, Python, Nix, and workflow code belongs here when existing
 apps demonstrate a common contract. There is no shared application database or
 universal domain model.

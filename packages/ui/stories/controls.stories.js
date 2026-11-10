@@ -23,6 +23,18 @@ export const Form = {
       select.append(option);
     }
     label.append(select);
+    const account = document.createElement("label");
+    account.textContent = "Provider account";
+    const accountInput = document.createElement("input");
+    accountInput.value = "Example provider";
+    accountInput.disabled = true;
+    account.append(accountInput);
+    const requirements = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = "Connection requirements";
+    const help = document.createElement("p");
+    help.textContent = "Choose a mailbox before saving the connection.";
+    requirements.append(summary, help);
     const save = document.createElement("button");
     save.type = "submit";
     save.textContent = "Save";
@@ -61,7 +73,16 @@ export const Form = {
     disabledSecondary.className = "quiet";
     disabledSecondary.textContent = "Reconnect";
     disabledSecondary.disabled = true;
-    form.append(label, checkbox, group, notes, save, disabledSecondary);
+    form.append(
+      label,
+      account,
+      checkbox,
+      group,
+      notes,
+      requirements,
+      save,
+      disabledSecondary,
+    );
     main.append(heading, form);
     return main;
   },
@@ -94,6 +115,60 @@ export const Dialog = {
     header.className = "dialog-heading";
     header.append(title, close);
     dialog.append(header, description);
+    main.append(heading, open, dialog);
+    return main;
+  },
+};
+
+/** @type {import('@storybook/html-vite').StoryObj} */
+export const LongForm = {
+  render: () => {
+    const main = document.createElement("main");
+    const heading = document.createElement("h1");
+    heading.textContent = "Long forms";
+    const open = document.createElement("button");
+    open.type = "button";
+    open.textContent = "Edit connection";
+    const dialog = document.createElement("dialog");
+    dialog.className = "dialog-panel";
+    dialog.setAttribute("aria-labelledby", "connection-title");
+    const form = document.createElement("form");
+    const header = document.createElement("div");
+    header.className = "dialog-heading";
+    const title = document.createElement("h2");
+    title.id = "connection-title";
+    title.textContent = "Edit connection";
+    header.append(title);
+    const body = document.createElement("div");
+    body.className = "dialog-body";
+    for (let number = 1; number <= 12; number += 1) {
+      const label = document.createElement("label");
+      label.textContent = `Example field ${number}`;
+      const input = document.createElement("input");
+      input.value = `Fictional value ${number}`;
+      label.append(input);
+      body.append(label);
+    }
+    body.style.cssText = "display:grid;gap:18px;padding-top:20px";
+    const footer = document.createElement("div");
+    footer.className = "dialog-footer";
+    footer.style.cssText = "display:flex;justify-content:flex-end;gap:10px";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "quiet";
+    cancel.textContent = "Cancel";
+    cancel.addEventListener("click", () => dialog.close());
+    const save = document.createElement("button");
+    save.type = "submit";
+    save.textContent = "Save connection";
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      dialog.close();
+    });
+    footer.append(cancel, save);
+    form.append(header, body, footer);
+    dialog.append(form);
+    open.addEventListener("click", () => dialog.showModal());
     main.append(heading, open, dialog);
     return main;
   },
