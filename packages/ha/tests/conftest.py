@@ -191,8 +191,17 @@ class NativeRepair:
 
 
 @pytest.fixture
-async def native(hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch) -> NativeRepair:
-    entry = MockConfigEntry(domain="example", state=ConfigEntryState.LOADED)
+def entry_state() -> ConfigEntryState:
+    return ConfigEntryState.LOADED
+
+
+@pytest.fixture
+async def native(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+    entry_state: ConfigEntryState,
+) -> NativeRepair:
+    entry = MockConfigEntry(domain="example", state=entry_state)
     entry.add_to_hass(hass)
     registry = er.async_get(hass)
     app = registry.async_get_or_create("update", "hassio", "example_app_version_latest")
@@ -232,13 +241,13 @@ async def native(hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch) -> Native
         if fixture.install_noop:
             return
         if identity == fixture.companion_entity:
-            assert call.data["version"] == "v1.1.0"
-            fixture.staged = "1.1.0"
+            assert call.data["version"] == f"v{fixture.latest}"
+            fixture.staged = fixture.latest
             if fixture.fault == "newer_app":
                 fixture.app = "2.0.0"
         else:
             assert identity == fixture.app_entity and "version" not in call.data
-            fixture.app = "1.1.0"
+            fixture.app = fixture.latest
         fixture.states()
 
     async def restart(call: ServiceCall) -> None:
