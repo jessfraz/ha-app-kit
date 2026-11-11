@@ -13,11 +13,11 @@ python /path/to/locked/crate/bundle.py \
   --manifest-path Cargo.toml --integration custom_components/example
 ```
 
-The producer resolves the resource crate through locked Cargo metadata and
-writes only `example/_app_kit`. Its receipt records the Kit tag, exact commit,
-companion version, and file hashes. Rebundling refuses unowned or modified
-helper files. Home Assistant loads the helper from each integration's private
-`_app_kit` package.
+The producer resolves the resource crate through locked Cargo metadata, writes
+`example/_app_kit`, and merges its shared version-repair translations. Its
+receipt records the Kit tag, exact commit, companion version, and file hashes.
+Rebundling refuses unowned or modified helper files. Home Assistant loads the
+helper from each integration's private `_app_kit` package.
 
 For Nix, `cargoLock.allowBuiltinFetchGit = true` supports lock-file updates
 without a versioned Kit hash entry. Keep hashes for other dependencies and
@@ -47,6 +47,20 @@ options `update_and_restart`, `update_app`, and `restart`, progress action
 `updating`, the `RepairReason` abort keys, and `restart_requested`. Its
 description placeholders are `app`, `app_version`, `integration_version`, and
 `target_version`.
+
+The locked producer merges the shared English version-repair `fix_flow` into
+`strings.json` and `translations/en.json`. It preserves the issue title, every
+unrelated key, and other languages. Both files must already exist. Their
+generated hashes are recorded separately from the private helper files in
+`source.json`. Temporary preflight failures show their exact translated cause
+and a Retry version check button. Retrying refreshes native evidence before
+offering the update confirmation. It does not start a backup, update, or
+restart. Changed or unavailable entry ownership remains terminal.
+
+Failure logs include only the public integration domain, repair stage, fixed
+reason and failed-check codes, and known loaded, backend, and target versions.
+They omit entry identifiers, transport exceptions, and backup or provider
+details.
 
 Run the Python checks with `uv run --project packages/ha --frozen` inside the
 repository's Nix shell. The tests use native HA entries, registries, services,

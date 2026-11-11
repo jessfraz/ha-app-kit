@@ -60,8 +60,8 @@ jobs:
       - run: nix develop --command python scripts/render-icons.py --check
       - run: >-
           nix build --impure --no-link --file packages/ha/tests/nix-vendor.nix
-          --arg pkgs '(import (builtins.getFlake (toString ./.)).inputs.nixpkgs
-          {})'
+          --arg pkgs '(import (builtins.getFlake ("git+file://" + toString
+          ./.)).inputs.nixpkgs {})'
 
   web:
     name: Storybook and browser
