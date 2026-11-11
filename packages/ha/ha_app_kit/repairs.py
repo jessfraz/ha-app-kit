@@ -4,7 +4,7 @@ import asyncio
 import logging
 import re
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from uuid import uuid4
 
 from homeassistant.components.backup import async_get_manager
@@ -127,8 +127,10 @@ class _Snapshot:
     app_entity: str | None
     companion_entity: str
 
-    def plan(self, loaded: ReleaseVersion) -> UpdatePlan:
-        return plan_update(
+    def plan(
+        self, loaded: ReleaseVersion, *, require_restart: bool = False
+    ) -> UpdatePlan:
+        plan = plan_update(
             app=self.app,
             loaded=loaded,
             staged=self.staged,
@@ -137,6 +139,9 @@ class _Snapshot:
             # When history is unknown, update to a known matching latest pair.
             published_tags=frozenset({self.companion_latest.tag}),
         )
+        # Failed setup has not established loaded parity. Re-enter setup in a
+        # fresh process even when only the backend needed updating.
+        return replace(plan, restart=True) if require_restart else plan
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,7 +161,12 @@ class VersionRepairs:
     """One entry's evidence and a single, explicit native update operation."""
 
     def __init__(
-        self, hass: HomeAssistant, entry: ConfigEntry, spec: VersionRepairSpec
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        spec: VersionRepairSpec,
+        *,
+        _startup_revision: str | None = None,
     ) -> None:
         if entry.domain != spec.domain:
             raise ValueError("Repair entry belongs to another integration")
@@ -166,6 +176,7 @@ class VersionRepairs:
         self._entry_data = entry.data
         self._entry_options = entry.options
         self._entry_runtime = getattr(entry, "runtime_data", None)
+        self._startup_revision = _startup_revision
         self._stopped = False
         self.issue_id = f"{entry.entry_id}_version_mismatch"
         self.lifecycle = _lifecycle(hass)
@@ -184,12 +195,19 @@ class VersionRepairs:
         self._stopped = True
 
     def _assert_owner(self) -> None:
+        valid_state = self.entry.state is ConfigEntryState.LOADED
+        if self._startup_revision is not None:
+            valid_state = (
+                self.entry.state
+                in {ConfigEntryState.SETUP_IN_PROGRESS, ConfigEntryState.SETUP_RETRY}
+                and self.entry.modified_at.isoformat() == self._startup_revision
+            )
         if (
             self._stopped
             or self.hass.config_entries.async_get_entry(self.entry.entry_id)
             is not self.entry
             or self.entry.disabled_by is not None
-            or self.entry.state is not ConfigEntryState.LOADED
+            or not valid_state
             or self.entry.data != self._entry_data
             or self.entry.options != self._entry_options
             or getattr(self.entry, "runtime_data", None) is not self._entry_runtime
@@ -245,6 +263,10 @@ class VersionRepairs:
             existing = registry.async_get_issue(self.spec.domain, self.issue_id)
             data = dict(existing.data or {}) if existing else {}
             data["entry_id"] = self.entry.entry_id
+            if self._startup_revision is not None:
+                data["startup_revision"] = self._startup_revision
+            else:
+                data.pop("startup_revision", None)
             ir.async_create_issue(
                 self.hass,
                 self.spec.domain,
@@ -516,7 +538,10 @@ class VersionRepairs:
             try:
                 snapshot = await self.async_snapshot()
                 app = snapshot.app
-                plan = snapshot.plan(self.spec.loaded_version)
+                plan = snapshot.plan(
+                    self.spec.loaded_version,
+                    require_restart=self._startup_revision is not None,
+                )
                 if plan.target != confirmed.target:
                     return failed(RepairReason.VERIFY_FAILED)
                 stage = "backup"
@@ -525,7 +550,10 @@ class VersionRepairs:
                 stage = "verify"
                 snapshot = await self._async_ready_snapshot()
                 app = snapshot.app
-                plan = snapshot.plan(self.spec.loaded_version)
+                plan = snapshot.plan(
+                    self.spec.loaded_version,
+                    require_restart=self._startup_revision is not None,
+                )
                 if plan.target != confirmed.target:
                     return failed(RepairReason.VERIFY_FAILED)
                 if plan.update_companion:
@@ -611,6 +639,36 @@ class VersionFixFlow(RepairsFlow):
         self._plan: UpdatePlan | None = None
         self._operation: asyncio.Task[ApplyResult] | None = None
         self._progress: asyncio.Task[ApplyResult] | None = None
+        # Setup retries may repeat without replacing this owner. An explicit
+        # unload or successful load ends it permanently, even if another failed
+        # setup later returns the entry to SETUP_RETRY with unchanged config.
+        self._owner_unsubscribe = (
+            repairs.entry.async_on_state_change(self._async_check_startup_owner)
+            if repairs._startup_revision is not None
+            else None
+        )
+
+    @callback
+    def _async_check_startup_owner(self) -> None:
+        try:
+            self.repairs._assert_owner()
+        except RepairUnavailable:
+            self.repairs._stopped = True
+
+    @callback
+    def _async_stop_watching(self) -> None:
+        if self._owner_unsubscribe is not None:
+            self._owner_unsubscribe()
+            self._owner_unsubscribe = None
+
+    @callback
+    def async_remove(self) -> None:
+        # Closing progress does not cancel a dispatched update. Keep its owner
+        # watcher until the HA-owned operation finishes, then release it.
+        if self._operation is not None and not self._operation.done():
+            self._operation.add_done_callback(lambda task: self._async_stop_watching())
+        else:
+            self._async_stop_watching()
 
     @callback
     def _async_preflight_unavailable(
@@ -651,7 +709,10 @@ class VersionFixFlow(RepairsFlow):
                 self.repairs.async_report(version)
                 return self.async_create_entry(title="", data={})
             snapshot = await self.repairs.async_snapshot()
-            self._plan = snapshot.plan(self.repairs.spec.loaded_version)
+            self._plan = snapshot.plan(
+                self.repairs.spec.loaded_version,
+                require_restart=self.repairs._startup_revision is not None,
+            )
         except RepairUnavailable as err:
             return self._async_preflight_unavailable(err.reason, version, err.check)
         except HomeAssistantError, ValueError:
@@ -758,6 +819,42 @@ class _UnavailableFixFlow(RepairsFlow):
 
 
 @callback
+def async_report_startup_version(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    spec: VersionRepairSpec,
+    version: ReleaseVersion,
+) -> None:
+    """Preserve a fresh mismatch when failed setup cannot own a coordinator."""
+    if version == spec.loaded_version:
+        # Only a fresh, fully loaded entry can close an existing incident.
+        return
+    VersionRepairs(
+        hass, entry, spec, _startup_revision=entry.modified_at.isoformat()
+    ).async_report(version)
+
+
+async def async_check_startup_version(
+    hass: HomeAssistant, entry: ConfigEntry, spec: VersionRepairSpec
+) -> None:
+    """Check only after failed setup, without relying on runtime_data."""
+    repairs = VersionRepairs(
+        hass, entry, spec, _startup_revision=entry.modified_at.isoformat()
+    )
+    try:
+        async with asyncio.timeout(_READINESS_TIMEOUT_SECONDS):
+            version = await repairs.async_probe()
+    except TimeoutError:
+        _log_failure(
+            spec, "startup", RepairReason.VERIFY_FAILED, check=RepairCheck.BACKEND_PROBE
+        )
+    except RepairUnavailable as err:
+        _log_failure(spec, "startup", err.reason, check=err.check)
+    else:
+        repairs.async_report(version)
+
+
+@callback
 def create_version_fix_flow(
     hass: HomeAssistant, issue_id: str, spec: VersionRepairSpec
 ) -> VersionFixFlow | _UnavailableFixFlow:
@@ -773,4 +870,22 @@ def create_version_fix_flow(
         or issue.data.get("entry_id") != entry.entry_id
     ):
         return _UnavailableFixFlow(spec)
-    return VersionFixFlow(VersionRepairs(hass, entry, spec))
+    startup_revision = issue.data.get("startup_revision")
+    if "startup_revision" in issue.data and (
+        not isinstance(startup_revision, str)
+        or startup_revision != entry.modified_at.isoformat()
+    ):
+        return _UnavailableFixFlow(spec)
+    return VersionFixFlow(
+        VersionRepairs(
+            hass,
+            entry,
+            spec,
+            _startup_revision=(
+                startup_revision
+                if isinstance(startup_revision, str)
+                and entry.state is not ConfigEntryState.LOADED
+                else None
+            ),
+        )
+    )

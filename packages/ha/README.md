@@ -28,12 +28,28 @@ that actual layout and the packaged producer with Cargo offline.
 After assigning an entry's runtime data, its coordinator creates one
 `VersionRepairs(hass, entry, spec)` and calls `async_start()`. The spec supplies
 the public domain, app name, fixed Marketplace repository ID, a backend version
-probe, and the Supervisor slug from that entry's native discovery. The slug is
-`None` for an externally managed backend. `loaded_version` comes from the
-bundled `version.LOADED_VERSION` constant, parsed with `ReleaseVersion.parse`.
-Successful coordinator reads call `async_report` with the observed version. The
-companion's `repairs.py` returns `create_version_fix_flow(hass, issue_id, spec)`
-for this issue.
+probe, and the Supervisor slug from that entry's native discovery. The probe
+uses the entry's configuration and HA's shared HTTP session; it must work before
+`entry.runtime_data` exists. The slug is `None` for an externally managed
+backend. `loaded_version` comes from the bundled `version.LOADED_VERSION`
+constant, parsed with `ReleaseVersion.parse`. Successful coordinator reads call
+`async_report` with the observed version. The companion's `repairs.py` returns
+`create_version_fix_flow(hass, issue_id, spec)` for this issue.
+
+When the first refresh raises `ConfigEntryNotReady`, call
+`await async_check_startup_version(hass, entry, spec)` before re-raising. The
+bounded check creates the same entry-scoped repair only after a fresh mismatch.
+If that setup attempt already observed the backend version, use the callback
+`async_report_startup_version(hass, entry, spec, version)` instead. Unknown or
+matching startup evidence cannot clear an incident. Remove local, non-fixable
+startup warnings when adopting these helpers.
+
+A startup flow owns the unchanged entry configuration while native setup is in
+progress or waiting to retry. An unload, disable, config change, successful
+load, or runtime replacement invalidates that operation. Normal automatic setup
+retries remain safe. Startup repairs use the same protected backup and native
+update checks and always request a restart. Only fresh loaded parity closes the
+issue. Keep the existing loaded coordinator lifecycle after the first refresh.
 
 The native flow first shows the proposed matching release. An explicit menu
 selection creates a full Core/database/app/folder backup using the configured
