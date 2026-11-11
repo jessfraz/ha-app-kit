@@ -81,7 +81,38 @@ def resolve_locked_kit(manifest: Path) -> LockedKit:
         path = crate / "ha_app_kit" / name
         if path.is_symlink() or not path.is_file():
             raise ValueError("Locked HA App Kit companion resources are incomplete")
+    translations = crate / "version-repair.json"
+    if translations.is_symlink() or not translations.is_file():
+        raise ValueError("Locked HA App Kit repair translations are incomplete")
     return LockedKit(root=crate, revision=revision, tag=tag)
+
+
+def _repair_translations(kit: LockedKit, integration: Path) -> dict[Path, bytes]:
+    """The shared flow owns only its English fix-flow subtree."""
+    canonical = json.loads((kit.root / "version-repair.json").read_text())
+    if not isinstance(canonical, dict):
+        raise ValueError("Invalid shared version-repair translations")
+    directory = integration / "translations"
+    if directory.is_symlink() or not directory.is_dir():
+        raise ValueError("Companion English translations must be a regular directory")
+    result = {}
+    for path in (integration / "strings.json", directory / "en.json"):
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("Companion English translations must be regular files")
+        data = json.loads(path.read_text())
+        if not isinstance(data, dict):
+            raise ValueError("Invalid companion translations")
+        issues = data.setdefault("issues", {})
+        if not isinstance(issues, dict):
+            raise ValueError("Invalid companion issue translations")
+        issue = issues.setdefault("version_mismatch", {})
+        if not isinstance(issue, dict):
+            raise ValueError("Invalid companion version-repair translations")
+        if "description" in issue:
+            raise ValueError("Version-repair description conflicts with the fix flow")
+        issue["fix_flow"] = canonical
+        result[path] = (json.dumps(data, indent=2, ensure_ascii=False) + "\n").encode()
+    return result
 
 
 def bundle(kit: LockedKit, integration: Path) -> dict[str, object]:
@@ -94,6 +125,7 @@ def bundle(kit: LockedKit, integration: Path) -> dict[str, object]:
     version = ReleaseVersion.parse(manifest["version"])
     if not _SHA.fullmatch(kit.revision) or ReleaseVersion.parse(kit.tag).tag != kit.tag:
         raise ValueError("Invalid locked Kit identity")
+    translations = _repair_translations(kit, integration)
     target = integration / "_app_kit"
     if target.is_symlink():
         raise ValueError("Generated helper package cannot be a symlink")
@@ -133,12 +165,18 @@ def bundle(kit: LockedKit, integration: Path) -> dict[str, object]:
         "files": {
             name: hashlib.sha256(data).hexdigest() for name, data in files.items()
         },
+        "translations": {
+            path.relative_to(integration).as_posix(): hashlib.sha256(data).hexdigest()
+            for path, data in translations.items()
+        },
     }
     files["source.json"] = (json.dumps(receipt, indent=2) + "\n").encode()
     # Build steps run before importing the companion. A sibling staging tree
     # keeps renames on one filesystem; preserve the old tree if rollback fails.
     staging = Path(tempfile.mkdtemp(prefix=".app-kit-", dir=integration))
     previous = staging / "previous"
+    previous.mkdir()
+    applied: list[tuple[Path, Path]] = []
     try:
         staged = staging / "_app_kit"
         staged.mkdir()
@@ -146,18 +184,33 @@ def bundle(kit: LockedKit, integration: Path) -> dict[str, object]:
             path = staged / name
             path.write_bytes(data)
             path.chmod(0o644)
-        if target.exists():
-            target.rename(previous)
+        replacements = [(target, staged)]
+        for index, (path, data) in enumerate(translations.items()):
+            translation = staging / f"translation-{index}.json"
+            translation.write_bytes(data)
+            translation.chmod(0o644)
+            replacements.append((path, translation))
+        for index, (destination, replacement) in enumerate(replacements):
+            backup = previous / str(index)
+            if destination.exists():
+                destination.rename(backup)
             try:
-                staged.rename(target)
+                replacement.rename(destination)
             except BaseException:
-                previous.rename(target)
+                if backup.exists():
+                    backup.rename(destination)
                 raise
-            shutil.rmtree(previous)
-        else:
-            staged.rename(target)
+            applied.append((destination, backup))
+    except BaseException:
+        for index, (destination, backup) in enumerate(reversed(applied)):
+            destination.rename(staging / f"rollback-{index}")
+            if backup.exists():
+                backup.rename(destination)
+        raise
+    else:
+        shutil.rmtree(previous)
     finally:
-        if not previous.exists():
+        if not previous.exists() or not any(previous.iterdir()):
             shutil.rmtree(staging)
     return receipt
 

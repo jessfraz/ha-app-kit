@@ -5,7 +5,7 @@ version.workspace = true
 edition.workspace = true
 license = "MIT AND Apache-2.0"
 repository.workspace = true
-include = ["Cargo.toml", "brand.py", "bundle.py", "icons/**", "rust/**", "ha_app_kit/*.py"]
+include = ["Cargo.toml", "brand.py", "bundle.py", "version-repair.json", "icons/**", "rust/**", "ha_app_kit/*.py"]
 
 [lib]
 path = "rust/lib.rs"

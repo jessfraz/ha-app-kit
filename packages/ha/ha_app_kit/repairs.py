@@ -1,6 +1,7 @@
 """Native version repairs; clients and credentials remain in each companion."""
 
 import asyncio
+import logging
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -21,6 +22,7 @@ from homeassistant.helpers.hassio import is_hassio
 
 from .versions import (
     ReleaseVersion,
+    RepairCheck,
     RepairReason,
     RepairUnavailable,
     UpdatePlan,
@@ -31,6 +33,7 @@ type VersionProbe = Callable[[HomeAssistant, ConfigEntry], Awaitable[ReleaseVers
 type SlugResolver = Callable[[ConfigEntry], str | None]
 _LIFECYCLE_KEY = "ha_app_kit_version_repairs"
 _READINESS_TIMEOUT_SECONDS = 30
+_LOGGER = logging.getLogger(__name__)
 
 
 async def _async_installed_apps(hass: HomeAssistant) -> dict[str, str]:
@@ -58,6 +61,38 @@ class VersionRepairSpec:
             raise ValueError("Invalid integration domain")
         if not self.repository_id.isascii() or not self.repository_id.isdecimal():
             raise ValueError("Invalid repository identity")
+
+
+@callback
+def _log_failure(
+    spec: VersionRepairSpec,
+    stage: str,
+    reason: RepairReason,
+    target: ReleaseVersion | None = None,
+    app: ReleaseVersion | None = None,
+    check: RepairCheck | None = None,
+) -> None:
+    """Keep diagnosis useful without private transport or entry details."""
+    _LOGGER.warning(
+        "Version repair failed: domain=%s stage=%s reason=%s check=%s "
+        "loaded_version=%s app_version=%s target_version=%s",
+        spec.domain,
+        stage,
+        reason,
+        check if check is not None else stage,
+        spec.loaded_version,
+        app if app is not None else "unknown",
+        target if target is not None else "unknown",
+    )
+
+
+def _update_version(value: object, check: RepairCheck) -> ReleaseVersion:
+    try:
+        return ReleaseVersion.parse(value)
+    except ValueError:
+        raise RepairUnavailable(
+            RepairReason.MANAGED_UPDATE_UNAVAILABLE, check
+        ) from None
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,7 +194,9 @@ class VersionRepairs:
             or self.entry.options != self._entry_options
             or getattr(self.entry, "runtime_data", None) is not self._entry_runtime
         ):
-            raise RepairUnavailable(RepairReason.ENTRY_UNAVAILABLE)
+            raise RepairUnavailable(
+                RepairReason.ENTRY_UNAVAILABLE, RepairCheck.ENTRY_OWNER
+            )
 
     @callback
     def _async_entry_state_changed(self) -> None:
@@ -189,7 +226,9 @@ class VersionRepairs:
         except Exception:
             # The owner may raise a transport exception containing its private
             # URL. Only the fixed reason crosses into the shared flow/registry.
-            raise RepairUnavailable(RepairReason.VERIFY_FAILED) from None
+            raise RepairUnavailable(
+                RepairReason.VERIFY_FAILED, RepairCheck.BACKEND_PROBE
+            ) from None
 
     @callback
     def async_report(self, version: ReleaseVersion) -> None:
@@ -233,24 +272,31 @@ class VersionRepairs:
     def _slug(self) -> str | None:
         slug = self.spec.app_slug(self.entry)
         if slug is not None and not re.fullmatch(r"[a-z0-9_]+", slug):
-            raise RepairUnavailable(RepairReason.MANAGED_UPDATE_UNAVAILABLE)
+            raise RepairUnavailable(
+                RepairReason.MANAGED_UPDATE_UNAVAILABLE, RepairCheck.APP_IDENTITY
+            )
         return slug
 
-    def _state(self, entity_id: str) -> State:
+    def _state(self, entity_id: str, check: RepairCheck) -> State:
         state = self.hass.states.get(entity_id)
         if state is None or state.state in {STATE_UNAVAILABLE, STATE_UNKNOWN}:
-            raise RepairUnavailable(RepairReason.MANAGED_UPDATE_UNAVAILABLE)
+            raise RepairUnavailable(RepairReason.MANAGED_UPDATE_UNAVAILABLE, check)
         features = state.attributes.get("supported_features")
         if (
             isinstance(features, bool)
             or not isinstance(features, int)
             or not features & UpdateEntityFeature.INSTALL
         ):
-            raise RepairUnavailable(RepairReason.MANAGED_UPDATE_UNAVAILABLE)
+            raise RepairUnavailable(
+                RepairReason.MANAGED_UPDATE_UNAVAILABLE,
+                RepairCheck.COMPANION_FEATURES
+                if check is RepairCheck.COMPANION_STATE
+                else check,
+            )
         progress = state.attributes.get("in_progress")
         # Numeric zero is an update at 0%, not an idle False boolean.
         if progress is not None and progress is not False:
-            raise RepairUnavailable(RepairReason.UPDATE_IN_PROGRESS)
+            raise RepairUnavailable(RepairReason.UPDATE_IN_PROGRESS, check)
         return state
 
     async def async_snapshot(self) -> _Snapshot:
@@ -260,7 +306,9 @@ class VersionRepairs:
             "update", "marketplace", self.spec.repository_id
         )
         if companion is None:
-            raise RepairUnavailable(RepairReason.MANAGED_UPDATE_UNAVAILABLE)
+            raise RepairUnavailable(
+                RepairReason.MANAGED_UPDATE_UNAVAILABLE, RepairCheck.COMPANION_REGISTRY
+            )
         slug = self._slug()
         app_entity = (
             registry.async_get_entity_id("update", "hassio", f"{slug}_version_latest")
@@ -268,35 +316,49 @@ class VersionRepairs:
             else None
         )
         ids = [companion, *([app_entity] if app_entity else [])]
-        await self.hass.services.async_call(
-            "homeassistant", "update_entity", {"entity_id": ids}, blocking=True
-        )
-        companion_state = self._state(companion)
+        try:
+            await self.hass.services.async_call(
+                "homeassistant", "update_entity", {"entity_id": ids}, blocking=True
+            )
+        except HomeAssistantError:
+            raise RepairUnavailable(
+                RepairReason.MANAGED_UPDATE_UNAVAILABLE, RepairCheck.NATIVE_REFRESH
+            ) from None
+        companion_state = self._state(companion, RepairCheck.COMPANION_STATE)
         if (
             not companion_state.attributes["supported_features"]
             & UpdateEntityFeature.SPECIFIC_VERSION
         ):
-            raise RepairUnavailable(RepairReason.MANAGED_UPDATE_UNAVAILABLE)
+            raise RepairUnavailable(
+                RepairReason.MANAGED_UPDATE_UNAVAILABLE, RepairCheck.COMPANION_FEATURES
+            )
         app = await self.async_probe()
         app_latest = None
         if app_entity:
-            app_state = self._state(app_entity)
+            app_state = self._state(app_entity, RepairCheck.APP_STATE)
             if (
-                ReleaseVersion.parse(app_state.attributes.get("installed_version"))
+                _update_version(
+                    app_state.attributes.get("installed_version"),
+                    RepairCheck.APP_VERSION,
+                )
                 != app
             ):
-                raise RepairUnavailable(RepairReason.VERIFY_FAILED)
-            app_latest = ReleaseVersion.parse(
-                app_state.attributes.get("latest_version")
+                raise RepairUnavailable(
+                    RepairReason.VERIFY_FAILED, RepairCheck.APP_VERSION
+                )
+            app_latest = _update_version(
+                app_state.attributes.get("latest_version"), RepairCheck.APP_CATALOG
             )
         return _Snapshot(
             app=app,
-            staged=ReleaseVersion.parse(
-                companion_state.attributes.get("installed_version")
+            staged=_update_version(
+                companion_state.attributes.get("installed_version"),
+                RepairCheck.COMPANION_VERSION,
             ),
             app_latest=app_latest,
-            companion_latest=ReleaseVersion.parse(
-                companion_state.attributes.get("latest_version")
+            companion_latest=_update_version(
+                companion_state.attributes.get("latest_version"),
+                RepairCheck.COMPANION_CATALOG,
             ),
             app_entity=app_entity,
             companion_entity=companion,
@@ -305,6 +367,7 @@ class VersionRepairs:
     async def _async_ready_snapshot(self) -> _Snapshot:
         # Cold app backups and native updates can finish before their HTTP
         # listener is ready. Retry only reads; never repeat an update operation.
+        last_check: RepairCheck | None = None
         try:
             async with asyncio.timeout(_READINESS_TIMEOUT_SECONDS):
                 while True:
@@ -313,9 +376,10 @@ class VersionRepairs:
                     except RepairUnavailable as err:
                         if err.reason is not RepairReason.VERIFY_FAILED:
                             raise
+                        last_check = err.check
                     await asyncio.sleep(1)
         except TimeoutError:
-            raise RepairUnavailable(RepairReason.VERIFY_FAILED) from None
+            raise RepairUnavailable(RepairReason.VERIFY_FAILED, last_check) from None
 
     @callback
     def _phase(self, operation: str, target: ReleaseVersion, phase: str) -> None:
@@ -438,23 +502,35 @@ class VersionRepairs:
 
     async def async_apply(self, confirmed: UpdatePlan) -> ApplyResult:
         """A closed dialog cannot cancel an already dispatched native update."""
+        stage = "preflight"
+        app: ReleaseVersion | None = None
+
+        def failed(reason: RepairReason, check: RepairCheck | None = None) -> Failed:
+            _log_failure(self.spec, stage, reason, confirmed.target, app, check)
+            return Failed(reason)
+
         async with self.lifecycle.lock:
             if self.lifecycle.restarting.is_set():
-                return Failed(RepairReason.RESTART_PENDING)
+                return failed(RepairReason.RESTART_PENDING)
             operation = uuid4().hex
             try:
                 snapshot = await self.async_snapshot()
+                app = snapshot.app
                 plan = snapshot.plan(self.spec.loaded_version)
                 if plan.target != confirmed.target:
-                    return Failed(RepairReason.VERIFY_FAILED)
+                    return failed(RepairReason.VERIFY_FAILED)
+                stage = "backup"
                 self._phase(operation, plan.target, "backup")
                 await self._async_backup(operation, snapshot.app)
+                stage = "verify"
                 snapshot = await self._async_ready_snapshot()
+                app = snapshot.app
                 plan = snapshot.plan(self.spec.loaded_version)
                 if plan.target != confirmed.target:
-                    return Failed(RepairReason.VERIFY_FAILED)
+                    return failed(RepairReason.VERIFY_FAILED)
                 if plan.update_companion:
                     self._assert_owner()
+                    stage = "companion_update"
                     self._phase(operation, plan.target, "companion_update")
                     await self.hass.services.async_call(
                         "update",
@@ -466,20 +542,23 @@ class VersionRepairs:
                         blocking=True,
                     )
                     snapshot = await self.async_snapshot()
+                    app = snapshot.app
                     if snapshot.staged != plan.target or snapshot.app > plan.target:
-                        return Failed(RepairReason.VERIFY_FAILED)
+                        return failed(RepairReason.VERIFY_FAILED)
                 if plan.update_app:
                     # Supervisor accepts latest only. Recheck that the native
                     # catalog still offers the exact pair confirmed above.
                     snapshot = await self.async_snapshot()
+                    app = snapshot.app
                     if snapshot.app > plan.target or snapshot.staged != plan.target:
-                        return Failed(RepairReason.VERIFY_FAILED)
+                        return failed(RepairReason.VERIFY_FAILED)
                     if snapshot.app != plan.target:
                         if (
                             snapshot.app_latest != plan.target
                             or not snapshot.app_entity
                         ):
-                            return Failed(RepairReason.VERIFY_FAILED)
+                            return failed(RepairReason.VERIFY_FAILED)
+                        stage = "app_update"
                         self._phase(operation, plan.target, "app_update")
                         await self.hass.services.async_call(
                             "update",
@@ -487,11 +566,14 @@ class VersionRepairs:
                             {"entity_id": snapshot.app_entity, "backup": False},
                             blocking=True,
                         )
+                stage = "verify"
                 final = await self._async_ready_snapshot()
+                app = final.app
                 if final.app != plan.target or final.staged != plan.target:
-                    return Failed(RepairReason.VERIFY_FAILED)
+                    return failed(RepairReason.VERIFY_FAILED)
                 if plan.restart:
                     self._assert_owner()
+                    stage = "restart"
                     self._phase(operation, plan.target, "restart_requested")
                     self.lifecycle.restarting.set()
                     try:
@@ -503,7 +585,7 @@ class VersionRepairs:
                         # Shutdown cancellation still propagates with the latch
                         # set, since CancelledError is a BaseException.
                         self.lifecycle.restarting.clear()
-                        return Failed(RepairReason.RESTART_FAILED)
+                        return failed(RepairReason.RESTART_FAILED)
                     return Applied(restart_requested=True)
                 observed = await self.async_probe()
                 self.async_report(observed)
@@ -511,14 +593,14 @@ class VersionRepairs:
                     observed != self.spec.loaded_version
                     or self.entry.state is not ConfigEntryState.LOADED
                 ):
-                    return Failed(RepairReason.VERIFY_FAILED)
+                    return failed(RepairReason.VERIFY_FAILED)
                 return Applied(restart_requested=False)
             except RepairUnavailable as err:
-                return Failed(err.reason)
+                return failed(err.reason, err.check)
             except Exception:
                 # Provider errors can contain private URLs. The flow keeps the
                 # incident and reconciles native versions before another write.
-                return Failed(RepairReason.UPDATE_FAILED)
+                return failed(RepairReason.UPDATE_FAILED)
 
 
 class VersionFixFlow(RepairsFlow):
@@ -530,14 +612,38 @@ class VersionFixFlow(RepairsFlow):
         self._operation: asyncio.Task[ApplyResult] | None = None
         self._progress: asyncio.Task[ApplyResult] | None = None
 
+    @callback
+    def _async_preflight_unavailable(
+        self,
+        reason: RepairReason,
+        app: ReleaseVersion | None = None,
+        check: RepairCheck | None = None,
+    ) -> RepairsFlowResult:
+        self._plan = None
+        _log_failure(self.repairs.spec, "preflight", reason, app=app, check=check)
+        if reason not in {
+            RepairReason.APP_UPDATE_UNAVAILABLE,
+            RepairReason.MATCHING_RELEASE_UNAVAILABLE,
+            RepairReason.MANAGED_UPDATE_UNAVAILABLE,
+            RepairReason.UPDATE_IN_PROGRESS,
+            RepairReason.VERIFY_FAILED,
+        }:
+            return self.async_abort(reason=reason)
+        return self.async_show_form(step_id="retry", errors={"base": reason})
+
     async def async_step_init(
         self, user_input: dict[str, object] | None = None
     ) -> RepairsFlowResult:
+        version: ReleaseVersion | None = None
         try:
             if self.repairs.lifecycle.restarting.is_set():
-                raise RepairUnavailable(RepairReason.RESTART_PENDING)
+                raise RepairUnavailable(
+                    RepairReason.RESTART_PENDING, RepairCheck.LIFECYCLE
+                )
             if self.repairs.lifecycle.lock.locked():
-                raise RepairUnavailable(RepairReason.UPDATE_IN_PROGRESS)
+                raise RepairUnavailable(
+                    RepairReason.UPDATE_IN_PROGRESS, RepairCheck.LIFECYCLE
+                )
             version = await self.repairs.async_probe()
             if version == self.repairs.spec.loaded_version and (
                 self.repairs.entry.state is ConfigEntryState.LOADED
@@ -547,9 +653,13 @@ class VersionFixFlow(RepairsFlow):
             snapshot = await self.repairs.async_snapshot()
             self._plan = snapshot.plan(self.repairs.spec.loaded_version)
         except RepairUnavailable as err:
-            return self.async_abort(reason=err.reason)
+            return self._async_preflight_unavailable(err.reason, version, err.check)
         except HomeAssistantError, ValueError:
-            return self.async_abort(reason=RepairReason.MANAGED_UPDATE_UNAVAILABLE)
+            return self._async_preflight_unavailable(
+                RepairReason.MANAGED_UPDATE_UNAVAILABLE,
+                version,
+                RepairCheck.NATIVE_REFRESH,
+            )
         action = "update_and_restart" if self._plan.restart else "update_app"
         if self._plan.restart and not (
             self._plan.update_app or self._plan.update_companion
@@ -565,6 +675,12 @@ class VersionFixFlow(RepairsFlow):
                 "target_version": str(self._plan.target),
             },
         )
+
+    async def async_step_retry(
+        self, user_input: dict[str, object] | None = None
+    ) -> RepairsFlowResult:
+        """Recheck native evidence; only the subsequent confirmation can apply."""
+        return await self.async_step_init()
 
     async def async_step_update_and_restart(
         self, user_input: dict[str, object] | None = None
@@ -624,11 +740,20 @@ class VersionFixFlow(RepairsFlow):
 
 
 class _UnavailableFixFlow(RepairsFlow):
-    """An unowned or stale issue cannot fall back to a dismiss-only repair."""
+    """An unowned or stale issue cannot offer an update operation."""
+
+    def __init__(self, spec: VersionRepairSpec) -> None:
+        self.spec = spec
 
     async def async_step_init(
         self, user_input: dict[str, object] | None = None
     ) -> RepairsFlowResult:
+        _log_failure(
+            self.spec,
+            "preflight",
+            RepairReason.ENTRY_UNAVAILABLE,
+            check=RepairCheck.ENTRY_OWNER,
+        )
         return self.async_abort(reason=RepairReason.ENTRY_UNAVAILABLE)
 
 
@@ -638,7 +763,7 @@ def create_version_fix_flow(
 ) -> VersionFixFlow | _UnavailableFixFlow:
     issue = ir.async_get(hass).async_get_issue(spec.domain, issue_id)
     if issue is None or not isinstance(issue.config_entry_id, str):
-        return _UnavailableFixFlow()
+        return _UnavailableFixFlow(spec)
     entry = hass.config_entries.async_get_entry(issue.config_entry_id)
     if (
         entry is None
@@ -647,5 +772,5 @@ def create_version_fix_flow(
         or not issue.data
         or issue.data.get("entry_id") != entry.entry_id
     ):
-        return _UnavailableFixFlow()
+        return _UnavailableFixFlow(spec)
     return VersionFixFlow(VersionRepairs(hass, entry, spec))

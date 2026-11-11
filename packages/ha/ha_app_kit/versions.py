@@ -53,11 +53,29 @@ class RepairReason(StrEnum):
     RESTART_PENDING = "restart_pending"
 
 
+class RepairCheck(StrEnum):
+    ENTRY_OWNER = "entry_owner"
+    LIFECYCLE = "lifecycle"
+    BACKEND_PROBE = "backend_probe"
+    COMPANION_REGISTRY = "companion_registry"
+    COMPANION_STATE = "companion_state"
+    COMPANION_FEATURES = "companion_features"
+    COMPANION_VERSION = "companion_version"
+    COMPANION_CATALOG = "companion_catalog"
+    APP_IDENTITY = "app_identity"
+    APP_STATE = "app_state"
+    APP_VERSION = "app_version"
+    APP_CATALOG = "app_catalog"
+    NATIVE_REFRESH = "native_refresh"
+    CATALOG_MATCH = "catalog_match"
+
+
 class RepairUnavailable(Exception):
     """A fixed, translated reason, never a provider exception or payload."""
 
-    def __init__(self, reason: RepairReason) -> None:
+    def __init__(self, reason: RepairReason, check: RepairCheck | None = None) -> None:
         self.reason = reason
+        self.check = check
         super().__init__(reason)
 
 
@@ -83,7 +101,9 @@ def plan_update(
     target = max(app, loaded, staged)
     if app < target:
         if app_latest is None or app_latest < target:
-            raise RepairUnavailable(RepairReason.APP_UPDATE_UNAVAILABLE)
+            raise RepairUnavailable(
+                RepairReason.APP_UPDATE_UNAVAILABLE, RepairCheck.CATALOG_MATCH
+            )
         target = app_latest
 
     if target.tag not in published_tags:
@@ -94,7 +114,9 @@ def plan_update(
             or app_latest < target
             or app_latest.tag not in published_tags
         ):
-            raise RepairUnavailable(RepairReason.MATCHING_RELEASE_UNAVAILABLE)
+            raise RepairUnavailable(
+                RepairReason.MATCHING_RELEASE_UNAVAILABLE, RepairCheck.CATALOG_MATCH
+            )
         target = app_latest
 
     return UpdatePlan(

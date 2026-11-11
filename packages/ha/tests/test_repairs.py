@@ -1,16 +1,27 @@
 """One explicit native repair, protected recovery, and a truthful final issue."""
 
 import asyncio
+from unittest.mock import Mock
 
 import pytest
 from aiohasupervisor.exceptions import SupervisorConnectionError
-from homeassistant.core import ServiceCall
+from homeassistant.components.repairs import RepairsFlow
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.setup import async_setup_component
+from pytest_homeassistant.common import MockModule, mock_integration, mock_platform
+from pytest_homeassistant.typing import ClientSessionGenerator
 
-from ha_app_kit.repairs import Applied, Failed, VersionFixFlow, create_version_fix_flow
+from ha_app_kit.repairs import (
+    Applied,
+    Failed,
+    VersionFixFlow,
+    VersionRepairs,
+    create_version_fix_flow,
+)
 from ha_app_kit.versions import ReleaseVersion, RepairReason, RepairUnavailable
 from tests.conftest import NativeRepair
 
@@ -24,6 +35,141 @@ def flow(native: NativeRepair) -> VersionFixFlow:
     result.flow_id = "fictional-flow"
     result.context = {"issue_id": repairs.issue_id}
     return result
+
+
+async def setup_native_repair(native: NativeRepair) -> VersionRepairs:
+    """Load the real repair manager and its integration-platform boundary."""
+    repairs = native.repairs()
+    repairs.async_report(ReleaseVersion.parse(native.app))
+
+    async def create(
+        hass: HomeAssistant, issue_id: str, data: dict[str, object] | None
+    ) -> RepairsFlow:
+        return create_version_fix_flow(hass, issue_id, repairs.spec)
+
+    mock_integration(native.hass, MockModule("example"))
+    mock_platform(
+        native.hass,
+        "example.repairs",
+        Mock(async_create_fix_flow=create),
+    )
+    assert await async_setup_component(native.hass, "example", {})
+    assert await async_setup_component(native.hass, "repairs", {})
+    return repairs
+
+
+@pytest.mark.parametrize(
+    ("fault", "reason", "check"),
+    [
+        ("registry", "managed_update_unavailable", "companion_registry"),
+        ("catalog", "matching_release_unavailable", "catalog_match"),
+        ("app_catalog", "app_update_unavailable", "catalog_match"),
+        ("probe", "verify_failed", "backend_probe"),
+        ("busy", "update_in_progress", "lifecycle"),
+    ],
+)
+async def test_native_preflight_retry_rechecks_before_showing_confirmation(
+    native: NativeRepair,
+    hass_client: ClientSessionGenerator,
+    caplog: pytest.LogCaptureFixture,
+    fault: str,
+    reason: str,
+    check: str,
+) -> None:
+    repairs = await setup_native_repair(native)
+    registry = er.async_get(native.hass)
+    if fault == "registry":
+        registry.async_remove(native.companion_entity)
+    elif fault == "catalog":
+        native.app = "1.2.0"
+    elif fault == "app_catalog":
+        native.staged = "1.2.0"
+    elif fault == "probe":
+        native.probe_failures = 1
+    else:
+        await repairs.lifecycle.lock.acquire()
+    client = await hass_client()
+    response = await client.post(
+        "/api/repairs/issues/fix",
+        json={"handler": "example", "issue_id": repairs.issue_id},
+    )
+    assert response.status == 200
+    retry = await response.json()
+    assert retry["type"] == "form", retry
+    assert retry["step_id"] == "retry"
+    assert retry["errors"] == {"base": reason}
+    failure = [r.getMessage() for r in caplog.records if r.name == "ha_app_kit.repairs"]
+    app = "unknown" if fault in {"probe", "busy"} else native.app
+    assert failure == [
+        f"Version repair failed: domain=example stage=preflight reason={reason} "
+        f"check={check} "
+        f"loaded_version=0.9.0 app_version={app} target_version=unknown"
+    ]
+    assert native.entry.entry_id not in failure[0]
+    assert "fictional-private-backend-url" not in failure[0]
+    assert native.events == []
+    assert ir.async_get(native.hass).async_get_issue("example", repairs.issue_id)
+
+    native.companion_entity = registry.async_get_or_create(
+        "update", "marketplace", "123456"
+    ).entity_id
+    native.latest = "1.2.0"
+    native.states()
+    if fault == "busy":
+        repairs.lifecycle.lock.release()
+    response = await client.post(f"/api/repairs/issues/fix/{retry['flow_id']}", json={})
+    assert response.status == 200
+    confirmation = await response.json()
+    assert confirmation["type"] == "menu", confirmation
+    assert confirmation["menu_options"] == ["update_and_restart"]
+    assert confirmation["description_placeholders"]["target_version"] == "1.2.0"
+    assert native.events == []
+    response = await client.delete(f"/api/repairs/issues/fix/{retry['flow_id']}")
+    assert response.status == 200
+    assert native.events == []
+    assert ir.async_get(native.hass).async_get_issue("example", repairs.issue_id)
+
+
+async def test_native_retry_cannot_continue_after_ownership_changes(
+    native: NativeRepair, hass_client: ClientSessionGenerator
+) -> None:
+    repairs = await setup_native_repair(native)
+    er.async_get(native.hass).async_remove(native.companion_entity)
+    client = await hass_client()
+    response = await client.post(
+        "/api/repairs/issues/fix",
+        json={"handler": "example", "issue_id": repairs.issue_id},
+    )
+    retry = await response.json()
+    assert retry["type"] == "form", retry
+    native.hass.config_entries.async_update_entry(
+        native.entry, options={"changed": True}
+    )
+    response = await client.post(f"/api/repairs/issues/fix/{retry['flow_id']}", json={})
+    assert response.status == 200
+    terminal = await response.json()
+    assert terminal["type"] == "abort"
+    assert terminal["reason"] == "entry_unavailable"
+    assert native.events == []
+    assert ir.async_get(native.hass).async_get_issue("example", repairs.issue_id)
+
+
+async def test_native_retry_cancellation_keeps_issue_without_starting_work(
+    native: NativeRepair, hass_client: ClientSessionGenerator
+) -> None:
+    repairs = await setup_native_repair(native)
+    er.async_get(native.hass).async_remove(native.companion_entity)
+    client = await hass_client()
+    response = await client.post(
+        "/api/repairs/issues/fix",
+        json={"handler": "example", "issue_id": repairs.issue_id},
+    )
+    retry = await response.json()
+    assert retry["type"] == "form", retry
+    response = await client.delete(f"/api/repairs/issues/fix/{retry['flow_id']}")
+    assert response.status == 200
+    assert native.events == []
+    assert ir.async_get(native.hass).async_get_issue("example", repairs.issue_id)
 
 
 async def test_confirmation_full_backup_native_updates_and_restart_keep_issue(
@@ -65,7 +211,7 @@ async def test_confirmation_full_backup_native_updates_and_restart_keep_issue(
 
 @pytest.mark.parametrize("fault", ["capture", "upload", "folder", "app", "unprotected"])
 async def test_partial_or_unprotected_recovery_never_updates(
-    native: NativeRepair, fault: str
+    native: NativeRepair, fault: str, caplog: pytest.LogCaptureFixture
 ) -> None:
     native.fault = fault
     repair = native.repairs()
@@ -75,10 +221,18 @@ async def test_partial_or_unprotected_recovery_never_updates(
     assert "app" not in native.events and "companion" not in native.events
     assert "restart" not in native.events
     assert not repair.lifecycle.lock.locked()
+    assert [
+        r.getMessage() for r in caplog.records if r.name == "ha_app_kit.repairs"
+    ] == [
+        "Version repair failed: domain=example stage=backup "
+        "reason=backup_failed check=backup "
+        "loaded_version=0.9.0 app_version=1.0.0 target_version=1.1.0"
+    ]
 
 
 async def test_companion_success_requires_readback_before_backend_update(
     native: NativeRepair,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     native.install_noop = True
     repair = native.repairs()
@@ -87,6 +241,13 @@ async def test_companion_success_requires_readback_before_backend_update(
     assert result == Failed(RepairReason.VERIFY_FAILED)
     assert native.events[-1] == "companion"
     assert "app" not in native.events and "restart" not in native.events
+    assert [
+        r.getMessage() for r in caplog.records if r.name == "ha_app_kit.repairs"
+    ] == [
+        "Version repair failed: domain=example stage=companion_update "
+        "reason=verify_failed check=companion_update loaded_version=0.9.0 "
+        "app_version=1.0.0 target_version=1.1.0"
+    ]
 
 
 async def test_partial_schedule_is_not_the_repair_recovery_scope(
@@ -134,6 +295,7 @@ async def test_cold_backup_waits_for_backend_before_any_update(
 async def test_native_restart_failure_releases_lifecycle_and_reconciles_retry(
     native: NativeRepair,
     restart_error: type[Exception],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     repair = native.repairs()
     repair.async_report(ReleaseVersion.parse(native.app))
@@ -147,6 +309,13 @@ async def test_native_restart_failure_releases_lifecycle_and_reconciles_retry(
     assert not repair.lifecycle.lock.locked()
     assert not repair.lifecycle.restarting.is_set()
     assert ir.async_get(native.hass).async_get_issue("example", repair.issue_id)
+    assert [
+        r.getMessage() for r in caplog.records if r.name == "ha_app_kit.repairs"
+    ] == [
+        "Version repair failed: domain=example stage=restart "
+        "reason=restart_failed check=restart "
+        "loaded_version=0.9.0 app_version=1.1.0 target_version=1.1.0"
+    ]
 
     async def restart(call: ServiceCall) -> None:
         native.events.append("restart")

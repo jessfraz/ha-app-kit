@@ -14,6 +14,7 @@
       ../Cargo.toml
       ../brand.py
       ../bundle.py
+      ../version-repair.json
       ../icons
       ../rust
       ../ha_app_kit/__init__.py
@@ -53,7 +54,7 @@ in
   } ''
     export CARGO_HOME="$TMPDIR/cargo-home"
     export CARGO_NET_OFFLINE=true
-    mkdir -p "$CARGO_HOME" consumer/src consumer/.cargo companion app
+    mkdir -p "$CARGO_HOME" consumer/src consumer/.cargo companion/translations app
     cat > consumer/Cargo.toml <<'EOF'
     [package]
     name = "fictional-consumer"
@@ -69,6 +70,9 @@ in
     substituteInPlace consumer/.cargo/config.toml \
       --replace-fail 'directory = "cargo-vendor-dir"' 'directory = "${vendor}"'
     printf '%s\n' '{"domain":"example","version":"1.2.3"}' > companion/manifest.json
+    printf '%s\n' '{"issues":{"version_mismatch":{"title":"Fictional mismatch"},"other":{"title":"Keep unrelated","description":"Keep this"}}}' > companion/strings.json
+    cp companion/strings.json companion/translations/en.json
+    printf '%s\n' '{"title":"Texte conservé"}' > companion/translations/fr.json
     python ${vendor}/ha-app-kit-ha-${kitVersion}/bundle.py \
       --manifest-path "$PWD/consumer/Cargo.toml" \
       --integration "$PWD/companion" > receipt.json
@@ -83,14 +87,27 @@ in
     cmp companion/brand/icon@2x.png ${vendor}/ha-app-kit-ha-${kitVersion}/icons/png/mailbox-outline/icon@2x.png
     python - <<'PY'
     import json
+    import hashlib
     from pathlib import Path
     receipt = json.loads(Path("receipt.json").read_text())
     assert receipt["kit_revision"] == "${revision}"
     assert receipt["kit_tag"] == "v${kitVersion}"
+    for path, digest in receipt["translations"].items():
+        data = Path("companion", path).read_bytes()
+        assert hashlib.sha256(data).hexdigest() == digest
+        strings = json.loads(data)
+        assert strings["issues"]["version_mismatch"]["title"] == "Fictional mismatch"
+        assert strings["issues"]["other"]["description"] == "Keep this"
+        flow = strings["issues"]["version_mismatch"]["fix_flow"]
+        assert flow["step"]["retry"]["submit"] == "Retry version check"
+        assert "managed_update_unavailable" in flow["error"]
+    assert Path("companion/translations/fr.json").read_text() == '{"title":"Texte conservé"}\n'
     for path in Path("companion/_app_kit").glob("*.py"):
         compile(path.read_text(), str(path), "exec")
     PY
     mkdir "$out"
     cp -R companion/_app_kit "$out/"
+    cp companion/strings.json "$out/"
+    cp -R companion/translations "$out/"
     cp receipt.json "$out/"
   ''
