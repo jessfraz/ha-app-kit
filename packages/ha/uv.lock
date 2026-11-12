@@ -1058,7 +1058,7 @@ wheels = [
 
 [[package]]
 name = "ha-app-kit-ha"
-version = "0.1.7"
+version = "0.1.8"
 source = { virtual = "." }
 
 [package.dev-dependencies]
