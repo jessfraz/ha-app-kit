@@ -78,16 +78,16 @@ test("form controls stay readable on touch screens and provide press feedback", 
   await select.selectOption("example");
   const save = page.getByRole("button", { name: "Save", exact: true });
   await save.scrollIntoViewIfNeeded();
-  const normalOpacity = await save.evaluate(
-    (button) => getComputedStyle(button).opacity,
+  const normalBackground = await save.evaluate(
+    (button) => getComputedStyle(button).backgroundImage,
   );
   const box = await save.boundingBox();
   expect(box).not.toBeNull();
   await page.mouse.move((box?.x ?? 0) + 10, (box?.y ?? 0) + 10);
   await page.mouse.down();
   expect(
-    await save.evaluate((button) => getComputedStyle(button).opacity),
-  ).not.toEqual(normalOpacity);
+    await save.evaluate((button) => getComputedStyle(button).backgroundImage),
+  ).not.toEqual(normalBackground);
   await page.mouse.up();
   expect(
     await page.evaluate(
