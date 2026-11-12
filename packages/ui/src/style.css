@@ -85,13 +85,6 @@ button {
   font-weight: 550;
   cursor: pointer;
 }
-/* Tint surfaces without fading labels or changing stretched-action hit areas. */
-button:not(:disabled):hover {
-  background-image: linear-gradient(
-    rgb(127 127 127 / 0.08),
-    rgb(127 127 127 / 0.08)
-  );
-}
 button:disabled,
 button.quiet:disabled,
 .view-switch button:disabled {
@@ -105,9 +98,18 @@ button.quiet {
   color: inherit;
   border-color: var(--control-border);
 }
-button.quiet:not(:disabled):hover {
-  background: var(--soft);
-  opacity: 1;
+/* Touch browsers can retain :hover after a tap. Keep that feedback pointer-only. */
+@media (hover: hover) and (pointer: fine) {
+  button:not(:disabled):hover {
+    background-image: linear-gradient(
+      rgb(127 127 127 / 0.08),
+      rgb(127 127 127 / 0.08)
+    );
+  }
+  button.quiet:not(:disabled):hover {
+    background: var(--soft);
+    opacity: 1;
+  }
 }
 button:not(:disabled):active,
 button.quiet:not(:disabled):active {
@@ -332,9 +334,11 @@ main {
   background: transparent;
   color: var(--muted);
 }
-.view-switch button:not(:disabled):not([aria-pressed="true"]):hover,
-.view-switch a:hover {
-  background: var(--soft);
+@media (hover: hover) and (pointer: fine) {
+  .view-switch button:not(:disabled):not([aria-pressed="true"]):hover,
+  .view-switch a:hover {
+    background: var(--soft);
+  }
 }
 .view-switch button[aria-pressed="true"],
 .view-switch a[aria-current="page"] {

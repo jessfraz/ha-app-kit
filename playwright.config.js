@@ -3,8 +3,8 @@ import { defineConfig, devices } from "@playwright/test";
 const layouts = [
   { name: "iphone-portrait", use: devices["iPhone 13"] },
   { name: "iphone-landscape", use: devices["iPhone 13 landscape"] },
-  { name: "ipad-portrait", use: devices["iPad Air"] },
-  { name: "ipad-landscape", use: devices["iPad Air landscape"] },
+  { name: "ipad-portrait", use: devices["iPad Pro 11"] },
+  { name: "ipad-landscape", use: devices["iPad Pro 11 landscape"] },
   {
     name: "desktop-portrait",
     use: { viewport: { width: 1000, height: 1440 } },

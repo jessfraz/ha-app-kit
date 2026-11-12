@@ -56,6 +56,107 @@ for (const theme of themes) {
       "Refresh requested",
     );
   });
+
+  test(`hover preserves control states and stays off touch screens in ${theme}`, async ({
+    page,
+  }, testInfo) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto(
+      "/iframe.html?id=app-shell--connected&viewMode=story&globals=a11y.manual:!true",
+    );
+    const canHover = await page.evaluate(
+      () => matchMedia("(hover: hover) and (pointer: fine)").matches,
+    );
+    expect(canHover).toBe(testInfo.project.name.startsWith("desktop-"));
+    const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+    const current = page.getByRole("link", { name: "Mail", exact: true });
+    const other = page.getByRole("link", { name: "All mail", exact: true });
+
+    for (const control of [refresh, current, other]) {
+      await page.mouse.move(0, 0);
+      const idle = await surface(control);
+      const bounds = await control.boundingBox();
+      await control.hover();
+      const hovered = await surface(control);
+      if (canHover && control !== current) {
+        expect(hovered.background).not.toEqual(idle.background);
+      } else {
+        expect(hovered).toEqual(idle);
+      }
+      expect(hovered.color).toEqual(idle.color);
+      expect(hovered.shadow).toEqual(idle.shadow);
+      expect(hovered.transform).toEqual("none");
+      expect(await control.boundingBox()).toEqual(bounds);
+    }
+
+    if (!canHover) {
+      await page.mouse.move(0, 0);
+      const idle = await surface(refresh);
+      await refresh.tap();
+      await expect
+        .poll(() => refresh.evaluate((button) => button.matches(":active")))
+        .toBe(false);
+      expect(await surface(refresh)).toEqual(idle);
+    }
+
+    await page.keyboard.press("Tab");
+    await refresh.focus();
+    await expect(refresh).toHaveCSS("outline-style", "solid");
+    await expect(refresh).toHaveCSS("outline-width", "2px");
+    await refresh.hover();
+    await expect(refresh).toHaveCSS("outline-style", "solid");
+    await expect(refresh).toHaveCSS("outline-width", "2px");
+    await page.screenshot({
+      path: testInfo.outputPath(`shell-hover-focus-${theme}.png`),
+      fullPage: true,
+    });
+
+    await page.goto(
+      "/iframe.html?id=components-controls--form&viewMode=story&globals=a11y.manual:!true",
+    );
+    const save = page.getByRole("button", { name: "Save", exact: true });
+    const reconnect = page.getByRole("button", {
+      name: "Reconnect",
+      exact: true,
+    });
+    for (const control of [save, reconnect]) {
+      await page.mouse.move(0, 0);
+      const idle = await surface(control);
+      await control.hover();
+      expect(await surface(control)).toEqual(idle);
+      await expect(control).toBeDisabled();
+    }
+    await page
+      .getByRole("combobox", { name: "Mailbox", exact: true })
+      .selectOption("example");
+    await page.mouse.move(0, 0);
+    const idle = await surface(save);
+    await save.hover();
+    const hovered = await surface(save);
+    if (canHover) expect(hovered.image).not.toEqual(idle.image);
+    else expect(hovered).toEqual(idle);
+    expect(hovered.color).toEqual(idle.color);
+    expect(hovered.shadow).toEqual(idle.shadow);
+    expect(hovered.transform).toEqual("none");
+    await page.screenshot({
+      path: testInfo.outputPath(`form-hover-${theme}.png`),
+      fullPage: true,
+    });
+  });
+}
+
+/** @param {import('@playwright/test').Locator} control */
+async function surface(control) {
+  return control.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      background: style.backgroundColor,
+      image: style.backgroundImage,
+      color: style.color,
+      shadow: style.boxShadow,
+      transform: style.transform,
+    };
+  });
 }
 
 test("form controls stay readable on touch screens and provide press feedback", async ({
