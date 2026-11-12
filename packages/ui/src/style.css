@@ -85,8 +85,12 @@ button {
   font-weight: 550;
   cursor: pointer;
 }
+/* Tint surfaces without fading labels or changing stretched-action hit areas. */
 button:not(:disabled):hover {
-  opacity: 0.88;
+  background-image: linear-gradient(
+    rgb(127 127 127 / 0.08),
+    rgb(127 127 127 / 0.08)
+  );
 }
 button:disabled,
 button.quiet:disabled,
@@ -107,7 +111,10 @@ button.quiet:not(:disabled):hover {
 }
 button:not(:disabled):active,
 button.quiet:not(:disabled):active {
-  opacity: 0.7;
+  background-image: linear-gradient(
+    rgb(127 127 127 / 0.18),
+    rgb(127 127 127 / 0.18)
+  );
 }
 button.small {
   padding: 7px 10px;

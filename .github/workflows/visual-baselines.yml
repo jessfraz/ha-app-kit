@@ -19,9 +19,12 @@ jobs:
       - run: nix develop --command pnpm install --frozen-lockfile
       - run:
           nix develop --command pnpm exec playwright install --with-deps
-          chromium webkit
+          chromium
       - run: nix develop --command pnpm build-storybook
-      - run: nix develop --command pnpm test --update-snapshots
+      - run: >-
+          nix develop --command pnpm test --update-snapshots
+          --project=desktop-light --project=desktop-dark --project=mobile-light
+          --project=mobile-dark
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: visual-baselines
