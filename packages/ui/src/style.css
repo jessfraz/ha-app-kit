@@ -7,6 +7,23 @@
     BlinkMacSystemFont,
     sans-serif;
   font-synthesis: none;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --page-gutter: var(--space-7);
+  --control-size: 44px;
+  --control-radius: 8px;
+  --surface-radius: 12px;
+  --dialog-inset: max(
+    16px,
+    env(safe-area-inset-top),
+    env(safe-area-inset-bottom)
+  );
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
   --paper: #fff;
   --background: #f7f7f6;
@@ -57,11 +74,11 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 button {
-  min-width: 44px;
-  min-height: 44px;
+  min-width: var(--control-size);
+  min-height: var(--control-size);
   padding: 10px 16px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--control-radius);
   background: var(--accent);
   color: var(--on-accent);
   font-size: 14px;
@@ -88,6 +105,10 @@ button.quiet:not(:disabled):hover {
   background: var(--soft);
   opacity: 1;
 }
+button:not(:disabled):active,
+button.quiet:not(:disabled):active {
+  opacity: 0.7;
+}
 button.small {
   padding: 7px 10px;
   font-size: 12px;
@@ -104,10 +125,12 @@ summary:focus-visible {
 input:where(:not([type="checkbox"]):not([type="radio"])),
 select,
 textarea {
-  min-height: 44px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: var(--control-size);
   padding: 10px 12px;
   border: 1px solid var(--control-border);
-  border-radius: 6px;
+  border-radius: var(--control-radius);
   background-color: var(--paper);
   color: var(--ink);
 }
@@ -160,21 +183,22 @@ textarea:disabled {
 }
 label {
   display: grid;
-  gap: 6px;
+  gap: var(--space-2);
+  min-width: 0;
   font-size: 13px;
 }
 label:has(> input:is([type="checkbox"], [type="radio"])) {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 44px;
+  min-height: var(--control-size);
 }
 label:has(> input:disabled) {
   color: var(--muted);
   cursor: not-allowed;
 }
 summary {
-  min-height: 44px;
+  min-height: var(--control-size);
   padding-block: 12px;
   cursor: pointer;
 }
@@ -182,7 +206,7 @@ fieldset {
   margin: 0;
   padding: 4px 16px 12px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--control-radius);
 }
 legend {
   padding: 0 6px;
@@ -212,10 +236,11 @@ h2 {
 }
 .page-heading {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 24px;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
 }
 .page-heading h1 {
   margin: 0;
@@ -228,18 +253,28 @@ main,
 }
 .app-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-3) var(--space-4);
   min-height: 80px;
-  padding: 20px 28px;
+  padding-block: var(--space-5);
   border-bottom: 1px solid var(--line);
+}
+.app-header,
+main,
+.app-footer {
+  padding-inline-start: max(var(--page-gutter), env(safe-area-inset-left));
+  padding-inline-end: max(var(--page-gutter), env(safe-area-inset-right));
 }
 .wordmark {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-height: 44px;
+  gap: var(--space-3);
+  min-width: 0;
+  max-width: 100%;
+  min-height: var(--control-size);
+  overflow-wrap: anywhere;
   color: var(--ink);
   font-size: 19px;
   font-weight: 650;
@@ -256,27 +291,35 @@ main,
 .header-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
   justify-content: flex-end;
   gap: 8px;
 }
+.header-actions > * {
+  max-width: 100%;
+}
 main {
-  padding: 28px;
+  padding-block: var(--space-7);
   min-width: 0;
 }
 .view-switch {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 28px;
+  margin-bottom: var(--space-6);
 }
 .view-switch button,
 .view-switch a {
   display: inline-flex;
   align-items: center;
-  min-height: 44px;
-  padding: 10px 14px;
+  justify-content: center;
+  min-width: var(--control-size);
+  min-height: var(--control-size);
+  padding: 10px var(--space-4);
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--control-radius);
   text-decoration: none;
   font-weight: 550;
   background: transparent;
@@ -299,7 +342,7 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 8px 20px;
-  padding: 20px 28px;
+  padding-block: var(--space-5);
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 12px;
@@ -310,7 +353,7 @@ main {
 .app-footer a {
   display: inline-flex;
   align-items: center;
-  min-height: 44px;
+  min-height: var(--control-size);
 }
 .app-version {
   font-family: var(--mono);
@@ -333,7 +376,7 @@ main {
 .notice {
   padding: 12px 16px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--control-radius);
   background: var(--paper);
 }
 .notice.error {
@@ -356,12 +399,12 @@ main {
   text-align: center;
 }
 dialog {
-  width: min(640px, calc(100% - 32px));
-  max-height: calc(100% - 32px);
+  width: min(640px, calc(100% - 2 * var(--dialog-inset)));
+  max-height: calc(100dvh - 2 * var(--dialog-inset));
   overflow: auto;
   padding: 24px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--surface-radius);
   background: var(--paper);
   color: var(--ink);
 }
@@ -388,7 +431,7 @@ dialog > :last-child {
 .dialog-panel > form {
   display: flex;
   flex-direction: column;
-  max-height: calc(100dvh - 34px);
+  max-height: calc(100dvh - 2 * var(--dialog-inset) - 2px);
 }
 .dialog-panel .dialog-heading {
   flex: none;
@@ -451,12 +494,15 @@ dialog > :last-child {
 }
 
 @media (max-width: 620px) {
+  :root {
+    --page-gutter: var(--space-5);
+  }
   .app-header,
   .app-footer {
-    padding: 18px 20px 16px;
+    padding-block: var(--space-4);
   }
   main {
-    padding: 22px 20px;
+    padding-block: var(--space-6);
   }
   .app-header {
     min-height: 72px;
@@ -466,6 +512,15 @@ dialog > :last-child {
     flex-direction: column;
     align-items: flex-start;
     gap: 6px;
+  }
+}
+
+/* Prevent focus zoom in touch browsers without reducing readable text. */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
   }
 }
 

@@ -39,6 +39,15 @@ Long native dialogs can use `dialog-panel`, with a form containing
 `actions` group in the footer wraps its buttons on narrow screens. The app still
 owns content spacing, submission, dismissal, focus, and pending work.
 
+UI changes follow
+[Apple’s Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/),
+with aligned content gutters, a 4px spacing scale, 44px control targets, and
+rounded rectangular controls. Use `--page-gutter`, `--space-1` through
+`--space-8`, `--control-radius`, and `--surface-radius` in app styles. Native
+checkboxes, radio buttons, and status indicators retain their familiar shapes.
+Validate phone, tablet, and desktop layouts in both orientations, light and dark
+themes, and keyboard navigation.
+
 Other shared Rust, Python, Nix, and workflow code belongs here when existing
 apps demonstrate a common contract. There is no shared application database or
 universal domain model.

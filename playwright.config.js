@@ -1,4 +1,22 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
+
+const layouts = [
+  { name: "iphone-portrait", use: devices["iPhone 13"] },
+  { name: "iphone-landscape", use: devices["iPhone 13 landscape"] },
+  { name: "ipad-portrait", use: devices["iPad Air"] },
+  { name: "ipad-landscape", use: devices["iPad Air landscape"] },
+  {
+    name: "desktop-portrait",
+    use: { viewport: { width: 1000, height: 1440 } },
+  },
+  {
+    name: "desktop-landscape",
+    use: { viewport: { width: 1440, height: 1000 } },
+  },
+];
+
+/** @type {Array<"chromium" | "webkit">} */
+const browsers = ["chromium", "webkit"];
 
 export default defineConfig({
   testDir: "./tests",
@@ -13,19 +31,30 @@ export default defineConfig({
   projects: [
     {
       name: "desktop-light",
+      testIgnore: "responsive.spec.js",
       use: { viewport: { width: 1440, height: 1000 }, colorScheme: "light" },
     },
     {
       name: "desktop-dark",
+      testIgnore: "responsive.spec.js",
       use: { viewport: { width: 1440, height: 1000 }, colorScheme: "dark" },
     },
     {
       name: "mobile-light",
+      testIgnore: "responsive.spec.js",
       use: { viewport: { width: 390, height: 844 }, colorScheme: "light" },
     },
     {
       name: "mobile-dark",
+      testIgnore: "responsive.spec.js",
       use: { viewport: { width: 390, height: 844 }, colorScheme: "dark" },
     },
+    ...layouts.flatMap(({ name, use }) =>
+      browsers.map((browserName) => ({
+        name: `${name}-${browserName}`,
+        testMatch: "responsive.spec.js",
+        use: { ...use, browserName },
+      })),
+    ),
   ],
 });
