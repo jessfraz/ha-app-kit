@@ -7,16 +7,16 @@ dependencies = []
 
 [dependency-groups]
 dev = [
-  "aiohasupervisor==0.10.0",
+  "aiohasupervisor==0.11.0",
   "gazetteer-matcher==1.2.0",
   "SQLAlchemy==2.0.54",
   "fnv-hash-fast==2.0.3",
   "psutil-home-assistant==0.0.1",
   "hassil==3.12.1",
   "home-assistant-intents==2026.10.27",
-  "pytest-homeassistant==2026.11.0",
-  "ruff==0.17.4",
-  "ty==0.0.99",
+  "pytest-homeassistant==2026.11.1",
+  "ruff==0.17.5",
+  "ty==0.0.104",
 ]
 
 [tool.uv]
