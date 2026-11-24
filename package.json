@@ -16,12 +16,12 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.11.0",
     "@playwright/test": "^1.65.1",
-    "@storybook/addon-a11y": "10.6.7",
-    "@storybook/addon-docs": "10.6.7",
-    "@storybook/html-vite": "10.6.7",
+    "@storybook/addon-a11y": "10.6.8",
+    "@storybook/addon-docs": "10.6.8",
+    "@storybook/html-vite": "10.6.8",
     "@types/node": "^26.6.6",
     "prettier": "^3.10.1",
-    "storybook": "10.6.7",
+    "storybook": "10.6.8",
     "typescript": "~7.0.2",
     "vite": "^8.3.8"
   }
